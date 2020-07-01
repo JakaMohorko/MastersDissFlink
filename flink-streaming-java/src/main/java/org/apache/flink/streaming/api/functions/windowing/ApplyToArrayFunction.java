@@ -19,9 +19,9 @@
 package org.apache.flink.streaming.api.functions.windowing;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
 import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.util.Collector;
-import scala.Int;
 
 import java.util.ArrayList;
 
@@ -29,19 +29,18 @@ import java.util.ArrayList;
  * A {@link WindowFunction} that just emits each input element.
  */
 @Internal
-public class PassThroughWindowFunction<K, W extends Window, T> implements WindowFunction<T, T, K, W> {
+public class ApplyToArrayFunction<K, W extends Window, T> implements WindowFunction<T, T, K, W> {
 
 	private static final long serialVersionUID = 1L;
 
-	private ArrayList<T> test = new ArrayList<T>();
-
 	@Override
 	public void apply(K k, W window, Iterable<T> input, Collector<T> out) throws Exception {
+		input = userFunction(Lists.newArrayList(input));
+
 		for (T in: input) {
-			test.add(in);
 			out.collect(in);
 		}
-	//	System.out.println(test);
-
 	}
+
+	public ArrayList<T> userFunction(ArrayList<T> arr){return arr;}
 }

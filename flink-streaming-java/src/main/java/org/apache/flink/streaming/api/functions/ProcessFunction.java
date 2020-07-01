@@ -25,6 +25,8 @@ import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
 
+import java.util.ArrayList;
+
 /**
  * A function that processes elements of a stream.
  *
@@ -67,6 +69,7 @@ public abstract class ProcessFunction<I, O> extends AbstractRichFunction {
 	 * @throws Exception This method may throw exceptions. Throwing an exception will cause the operation
 	 *                   to fail and may trigger recovery.
 	 */
+
 	public abstract void processElement(I value, Context ctx, Collector<O> out) throws Exception;
 
 	/**

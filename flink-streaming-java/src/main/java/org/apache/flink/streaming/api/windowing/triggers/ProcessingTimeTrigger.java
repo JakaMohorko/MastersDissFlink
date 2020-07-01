@@ -44,6 +44,7 @@ public class ProcessingTimeTrigger extends Trigger<Object, TimeWindow> {
 
 	@Override
 	public TriggerResult onProcessingTime(long time, TimeWindow window, TriggerContext ctx) {
+		//System.out.println("Window triggered: " + time);
 		return TriggerResult.FIRE;
 	}
 

@@ -18,27 +18,35 @@
 package org.apache.flink.streaming.api.operators;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.api.common.functions.FilterFunction;
+import org.apache.flink.streaming.api.operators.util.Resampler;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 /**
- * A {@link StreamOperator} for executing {@link FilterFunction FilterFunctions}.
+ * Resampling for array creation with default value and no interpolation.
+ * @param <IN> Type of input
  */
 @Internal
-public class StreamFilter<IN> extends AbstractUdfStreamOperator<IN, FilterFunction<IN>> implements OneInputStreamOperator<IN, IN> {
+public class ResamplingOperator<IN> extends AbstractUdfStreamOperator<IN, Resampler<IN>> implements OneInputStreamOperator<IN, IN> {
 
 	private static final long serialVersionUID = 1L;
 
-	public StreamFilter(FilterFunction<IN> filterFunction) {
-		super(filterFunction);
+	private transient TimestampedCollector<IN> collector;
+
+	public ResamplingOperator(long samplingInterval, IN defaultValue){
+		super(new Resampler<IN>(samplingInterval, defaultValue));
 		chainingStrategy = ChainingStrategy.ALWAYS;
 	}
 
 	@Override
+	public void open() throws Exception {
+		super.open();
+		collector = new TimestampedCollector<>(output);
+	}
+
+	@Override
 	public void processElement(StreamRecord<IN> element) throws Exception {
-		if (userFunction.filter(element.getValue())) {
-			output.collect(element);
-		}
+		collector.setTimestamp(element);
+		userFunction.resample(element.getValue(), element.getTimestamp(), collector);
 	}
 
 }

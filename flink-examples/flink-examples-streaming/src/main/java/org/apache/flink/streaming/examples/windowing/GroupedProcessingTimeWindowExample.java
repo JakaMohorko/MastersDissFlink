@@ -26,8 +26,14 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
+import org.apache.flink.streaming.api.functions.windowing.PassThroughWindowFunction;
+import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.evictors.TimeEvictor;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.util.Collector;
 
@@ -42,18 +48,19 @@ public class GroupedProcessingTimeWindowExample {
 	public static void main(String[] args) throws Exception {
 
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-		env.setParallelism(4);
+		env.setParallelism(1);
 
 		DataStream<Tuple2<Long, Long>> stream = env.addSource(new DataSource());
 
 		stream
-			.keyBy(0)
-			.timeWindow(Time.of(2500, MILLISECONDS), Time.of(500, MILLISECONDS))
-			.reduce(new SummingReducer())
+			.keyBy(t -> t.f1)
+			.timeWindow(Time.milliseconds(150))
+//			.evictor(new TimeEvictor<>(200))
+			.process(new TestProcessFunction())
 
 			// alternative: use a apply function which does not pre-aggregate
 //			.keyBy(new FirstFieldKeyExtractor<Tuple2<Long, Long>, Long>())
-//			.window(Time.of(2500, MILLISECONDS), Time.of(500, MILLISECONDS))
+//			.window(TumblingEventTimeWindows.of(Time.of(100, MILLISECONDS)))
 //			.apply(new SummingWindowFunction())
 
 			.addSink(new SinkFunction<Tuple2<Long, Long>>() {
@@ -87,6 +94,21 @@ public class GroupedProcessingTimeWindowExample {
 		}
 	}
 
+	public static class TestProcessFunction extends ProcessWindowFunction<Tuple2<Long, Long>, Tuple2<Long, Long>, Long, TimeWindow>{
+
+		@Override
+		public void process(Long key, Context ctx, Iterable<Tuple2<Long, Long>> values, Collector<Tuple2<Long, Long>> out){
+			int counter = 0;
+
+			for (Tuple2<Long, Long> v : values){
+				out.collect(v);
+				counter++;
+			}
+			System.out.println(counter);
+		}
+
+	}
+
 	private static class SummingReducer implements ReduceFunction<Tuple2<Long, Long>> {
 
 		@Override
@@ -107,7 +129,7 @@ public class GroupedProcessingTimeWindowExample {
 
 			final long startTime = System.currentTimeMillis();
 
-			final long numElements = 20000000;
+			final long numElements = 200000;
 			final long numKeys = 10000;
 			long val = 1L;
 			long count = 0L;

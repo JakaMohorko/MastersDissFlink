@@ -1,20 +1,20 @@
 /*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package org.apache.flink.streaming.runtime.operators.windowing;
 
@@ -42,6 +42,7 @@ import org.apache.flink.shaded.guava18.com.google.common.base.Function;
 import org.apache.flink.shaded.guava18.com.google.common.collect.FluentIterable;
 import org.apache.flink.shaded.guava18.com.google.common.collect.Iterables;
 
+import java.util.ArrayList;
 import java.util.Collection;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -59,11 +60,11 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * @param <W> The type of {@code Window} that the {@code WindowAssigner} assigns.
  */
 @Internal
-public class EvictingWindowOperator<K, IN, OUT, W extends Window>
-		extends WindowOperator<K, IN, Iterable<IN>, OUT, W> {
+public class ArrayWindowOperator<K, IN, OUT, W extends Window>
+	extends WindowOperator<K, IN, Iterable<IN>, OUT, W> {
 
 	private static final long serialVersionUID = 1L;
-	private Boolean called = false;
+
 
 	// ------------------------------------------------------------------------
 	// these fields are set by the API stream graph builder to configure the operator
@@ -81,28 +82,29 @@ public class EvictingWindowOperator<K, IN, OUT, W extends Window>
 
 	// ------------------------------------------------------------------------
 
-	public EvictingWindowOperator(WindowAssigner<? super IN, W> windowAssigner,
-			TypeSerializer<W> windowSerializer,
-			KeySelector<IN, K> keySelector,
-			TypeSerializer<K> keySerializer,
-			StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
-			InternalWindowFunction<Iterable<IN>, OUT, K, W> windowFunction,
-			Trigger<? super IN, ? super W> trigger,
-			Evictor<? super IN, ? super W> evictor,
-			long allowedLateness,
-			OutputTag<IN> lateDataOutputTag) {
+	public ArrayWindowOperator(WindowAssigner<? super IN, W> windowAssigner,
+								TypeSerializer<W> windowSerializer,
+								KeySelector<IN, K> keySelector,
+								TypeSerializer<K> keySerializer,
+								StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
+								InternalWindowFunction<Iterable<IN>, OUT, K, W> windowFunction,
+								Trigger<? super IN, ? super W> trigger,
+								Evictor<? super IN, ? super W> evictor,
+								long allowedLateness,
+								OutputTag<IN> lateDataOutputTag
+								) {
 
 		super(windowAssigner, windowSerializer, keySelector,
 			keySerializer, null, windowFunction, trigger, allowedLateness, lateDataOutputTag);
 
-		this.evictor = checkNotNull(evictor);
+		this.evictor = evictor;
 		this.evictingWindowStateDescriptor = checkNotNull(windowStateDescriptor);
 	}
 
 	@Override
 	public void processElement(StreamRecord<IN> element) throws Exception {
 		final Collection<W> elementWindows = windowAssigner.assignWindows(
-				element.getValue(), element.getTimestamp(), windowAssignerContext);
+			element.getValue(), element.getTimestamp(), windowAssignerContext);
 
 		//if element is handled by none of assigned elementWindows
 		boolean isSkippedElement = true;
@@ -118,39 +120,39 @@ public class EvictingWindowOperator<K, IN, OUT, W extends Window>
 				// is the merged window and we work with that. If we don't merge then
 				// actualWindow == window
 				W actualWindow = mergingWindows.addWindow(window,
-						new MergingWindowSet.MergeFunction<W>() {
-							@Override
-							public void merge(W mergeResult,
-									Collection<W> mergedWindows, W stateWindowResult,
-									Collection<W> mergedStateWindows) throws Exception {
+					new MergingWindowSet.MergeFunction<W>() {
+						@Override
+						public void merge(W mergeResult,
+							Collection<W> mergedWindows, W stateWindowResult,
+							Collection<W> mergedStateWindows) throws Exception {
 
-								if ((windowAssigner.isEventTime() && mergeResult.maxTimestamp() + allowedLateness <= internalTimerService.currentWatermark())) {
-									throw new UnsupportedOperationException("The end timestamp of an " +
-											"event-time window cannot become earlier than the current watermark " +
-											"by merging. Current watermark: " + internalTimerService.currentWatermark() +
-											" window: " + mergeResult);
-								} else if (!windowAssigner.isEventTime() && mergeResult.maxTimestamp() <= internalTimerService.currentProcessingTime()) {
-									throw new UnsupportedOperationException("The end timestamp of a " +
-											"processing-time window cannot become earlier than the current processing time " +
-											"by merging. Current processing time: " + internalTimerService.currentProcessingTime() +
-											" window: " + mergeResult);
-								}
-
-								triggerContext.key = key;
-								triggerContext.window = mergeResult;
-
-								triggerContext.onMerge(mergedWindows);
-
-								for (W m : mergedWindows) {
-									triggerContext.window = m;
-									triggerContext.clear();
-									deleteCleanupTimer(m);
-								}
-
-								// merge the merged state windows into the newly resulting state window
-								evictingWindowState.mergeNamespaces(stateWindowResult, mergedStateWindows);
+							if ((windowAssigner.isEventTime() && mergeResult.maxTimestamp() + allowedLateness <= internalTimerService.currentWatermark())) {
+								throw new UnsupportedOperationException("The end timestamp of an " +
+									"event-time window cannot become earlier than the current watermark " +
+									"by merging. Current watermark: " + internalTimerService.currentWatermark() +
+									" window: " + mergeResult);
+							} else if (!windowAssigner.isEventTime() && mergeResult.maxTimestamp() <= internalTimerService.currentProcessingTime()) {
+								throw new UnsupportedOperationException("The end timestamp of a " +
+									"processing-time window cannot become earlier than the current processing time " +
+									"by merging. Current processing time: " + internalTimerService.currentProcessingTime() +
+									" window: " + mergeResult);
 							}
-						});
+
+							triggerContext.key = key;
+							triggerContext.window = mergeResult;
+
+							triggerContext.onMerge(mergedWindows);
+
+							for (W m : mergedWindows) {
+								triggerContext.window = m;
+								triggerContext.clear();
+								deleteCleanupTimer(m);
+							}
+
+							// merge the merged state windows into the newly resulting state window
+							evictingWindowState.mergeNamespaces(stateWindowResult, mergedStateWindows);
+						}
+					});
 
 				// drop if the window is already late
 				if (isWindowLate(actualWindow)) {
@@ -336,41 +338,69 @@ public class EvictingWindowOperator<K, IN, OUT, W extends Window>
 
 	private void emitWindowContents(W window, Iterable<StreamRecord<IN>> contents, ListState<StreamRecord<IN>> windowState) throws Exception {
 		timestampedCollector.setAbsoluteTimestamp(window.maxTimestamp());
+		System.out.println(contents);
+		if (evictor != null){
 
-		// Work around type system restrictions...
-		FluentIterable<TimestampedValue<IN>> recordsWithTimestamp = FluentIterable
-			.from(contents)
-			.transform(new Function<StreamRecord<IN>, TimestampedValue<IN>>() {
-				@Override
-				public TimestampedValue<IN> apply(StreamRecord<IN> input) {
-					return TimestampedValue.from(input);
-				}
-			});
-		evictorContext.evictBefore(recordsWithTimestamp, Iterables.size(recordsWithTimestamp));
-		FluentIterable<IN> projectedContents = recordsWithTimestamp
-			.transform(new Function<TimestampedValue<IN>, IN>() {
-				@Override
-				public IN apply(TimestampedValue<IN> input) {
-					return input.getValue();
-				}
-			});
+			// Work around type system restrictions...
+			FluentIterable<TimestampedValue<IN>> recordsWithTimestamp = FluentIterable
+				.from(contents)
+				.transform(new Function<StreamRecord<IN>, TimestampedValue<IN>>() {
+					@Override
+					public TimestampedValue<IN> apply(StreamRecord<IN> input) {
+						return TimestampedValue.from(input);
+					}
+				});
 
-		processContext.window = triggerContext.window;
-		userFunction.process(triggerContext.key, triggerContext.window, processContext, projectedContents, timestampedCollector);
-		evictorContext.evictAfter(recordsWithTimestamp, Iterables.size(recordsWithTimestamp));
+			evictorContext.evictBefore(recordsWithTimestamp, Iterables.size(recordsWithTimestamp));
 
-		//work around to fix FLINK-4369, remove the evicted elements from the windowState.
-		//this is inefficient, but there is no other way to remove elements from ListState, which is an AppendingState.
-		windowState.clear();
-		for (TimestampedValue<IN> record : recordsWithTimestamp) {
-			windowState.add(record.getStreamRecord());
+			FluentIterable<IN> projectedContents = recordsWithTimestamp
+				.transform(new Function<TimestampedValue<IN>, IN>() {
+					@Override
+					public IN apply(TimestampedValue<IN> input) {
+						return input.getValue();
+					}
+				});
+
+			Iterable<IN> arrayForm = createArray(projectedContents);
+
+			processContext.window = triggerContext.window;
+			userFunction.process(triggerContext.key, triggerContext.window, processContext, arrayForm, timestampedCollector);
+			evictorContext.evictAfter(recordsWithTimestamp, Iterables.size(recordsWithTimestamp));
+
+			//work around to fix FLINK-4369, remove the evicted elements from the windowState.
+			//this is inefficient, but there is no other way to remove elements from ListState, which is an AppendingState.
+			windowState.clear();
+			for (TimestampedValue<IN> record : recordsWithTimestamp) {
+				windowState.add(record.getStreamRecord());
+			}
+		}
+		else {
+			Iterable<IN> arrayForm = createArray(contents);
+			processContext.window = triggerContext.window;
+			userFunction.process(triggerContext.key, triggerContext.window, processContext, arrayForm, timestampedCollector);
 		}
 	}
 
+	private Iterable<IN> createArray(FluentIterable<IN> projectedContents){
+		ArrayList<IN> arr = new ArrayList<>();
+		for (IN it : projectedContents){
+			arr.add(it);
+		}
+		return arr;
+	}
+
+	private Iterable<IN> createArray(Iterable<StreamRecord<IN>> contents){
+		ArrayList<IN> arr = new ArrayList<>();
+		for (StreamRecord<IN> it : contents){
+			arr.add(it.getValue());
+		}
+		return arr;
+	}
+
 	private void clearAllState(
-			W window,
-			ListState<StreamRecord<IN>> windowState,
-			MergingWindowSet<W> mergingWindows) throws Exception {
+		W window,
+		ListState<StreamRecord<IN>> windowState,
+		MergingWindowSet<W> mergingWindows) throws Exception {
 		windowState.clear();
 		triggerContext.clear();
 		processContext.window = window;
@@ -409,7 +439,7 @@ public class EvictingWindowOperator<K, IN, OUT, W extends Window>
 
 		@Override
 		public MetricGroup getMetricGroup() {
-			return EvictingWindowOperator.this.getMetricGroup();
+			return ArrayWindowOperator.this.getMetricGroup();
 		}
 
 		public K getKey() {
@@ -431,7 +461,7 @@ public class EvictingWindowOperator<K, IN, OUT, W extends Window>
 
 		evictorContext = new EvictorContext(null, null);
 		evictingWindowState = (InternalListState<K, W, StreamRecord<IN>>)
-				getOrCreateKeyedState(windowSerializer, evictingWindowStateDescriptor);
+			getOrCreateKeyedState(windowSerializer, evictingWindowStateDescriptor);
 	}
 
 	@Override

@@ -29,7 +29,9 @@ import org.apache.flink.api.common.state.ReducingStateDescriptor;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.BasicArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
+import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.Utils;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.typeutils.EnumTypeInfo;
@@ -49,11 +51,16 @@ import org.apache.flink.streaming.api.functions.query.QueryableValueStateOperato
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.graph.StreamGraphGenerator;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
+import org.apache.flink.streaming.api.operators.KeyedResamplingOperator;
 import org.apache.flink.streaming.api.operators.LegacyKeyedProcessOperator;
+import org.apache.flink.streaming.api.operators.ResamplingOperator;
+import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamGroupedFold;
 import org.apache.flink.streaming.api.operators.StreamGroupedReduce;
 import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.co.IntervalJoinOperator;
+import org.apache.flink.streaming.api.operators.util.DataStorage;
+import org.apache.flink.streaming.api.operators.util.interpolators.KeyedInterpolator;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.api.windowing.assigners.GlobalWindows;
@@ -71,6 +78,8 @@ import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.streaming.runtime.partitioner.KeyGroupStreamPartitioner;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
+import org.apache.flink.streaming.util.typeutils.FieldAccessor;
+import org.apache.flink.streaming.util.typeutils.FieldAccessorFactory;
 import org.apache.flink.util.Preconditions;
 
 import org.apache.commons.lang3.StringUtils;
@@ -425,6 +434,7 @@ public class KeyedStream<T, KEY> extends DataStream<T> {
 	public <T1> IntervalJoin<T, T1, KEY> intervalJoin(KeyedStream<T1, KEY> otherStream) {
 		return new IntervalJoin<>(this, otherStream);
 	}
+
 
 	/**
 	 * Perform a join over a time interval.
@@ -1095,4 +1105,26 @@ public class KeyedStream<T, KEY> extends DataStream<T> {
 				getKeyType().createSerializer(getExecutionConfig()));
 	}
 
+	@SuppressWarnings({ "unchecked" })
+	public <R> SingleOutputStreamOperator<R> keyedResample(long samplingInterval, R defaultValue) {
+		return doTransform("Resample", (TypeInformation<R>) getType(),
+			SimpleOperatorFactory.of(new ResamplingOperator<R>(samplingInterval, defaultValue)));
+	}
+
+	@SuppressWarnings({ "unchecked" })
+	public <R> SingleOutputStreamOperator<R> keyedResample(long samplingInterval, int interpolationBuffer,
+						KeyedInterpolator<R> interpolator, int dataField) {
+
+		FieldAccessor<R, Object> fieldAccessor = FieldAccessorFactory.getAccessor((TypeInformation<R>) getType(),
+			dataField, getExecutionConfig());
+
+		TypeSerializer<DataStorage<R>> dataType = TypeInformation.of(new TypeHint<DataStorage<R>>(){}).createSerializer(getExecutionConfig());
+
+		KeyedResamplingOperator<R, KEY> resamplingOperator = new KeyedResamplingOperator<>(samplingInterval,
+			interpolationBuffer, interpolator, fieldAccessor.getFieldType().getTypeClass(), fieldAccessor,
+			(KeySelector<R, KEY>) keySelector, dataType);
+
+		return doTransform("Resample", (TypeInformation<R>) getType(),
+			SimpleOperatorFactory.of(resamplingOperator));
+	}
 }

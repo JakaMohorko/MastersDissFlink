@@ -1554,6 +1554,16 @@ public class AllWindowedStream<T, W extends Window> {
 		return aggregate(new ComparableAggregator<>(field, input.getType(), AggregationFunction.AggregationType.MAXBY, first, input.getExecutionConfig()));
 	}
 
+	public ArrayWindowedStream<T, Byte, W> toArrayStream() {
+		return new ArrayWindowedStream<T, Byte, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
+			null);
+	}
+
+	public ArrayWindowedStream<T, Byte, W> toArrayStream(Evictor<? super T, ? super W> evictor) {
+		return new ArrayWindowedStream<T, Byte, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
+			evictor);
+	}
+
 	private SingleOutputStreamOperator<T> aggregate(AggregationFunction<T> aggregator) {
 		return reduce(aggregator);
 	}

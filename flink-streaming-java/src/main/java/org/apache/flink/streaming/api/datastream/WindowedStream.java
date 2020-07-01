@@ -1539,6 +1539,16 @@ public class WindowedStream<T, K, W extends Window> {
 		return input.getType();
 	}
 
+	public ArrayWindowedStream<T, K, W> toArrayStream() {
+		return new ArrayWindowedStream<T, K, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
+			null);
+	}
+
+	public ArrayWindowedStream<T, K, W> toArrayStream(Evictor<? super T, ? super W> evictor) {
+		return new ArrayWindowedStream<T, K, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
+												evictor);
+	}
+
 	// -------------------- Testing Methods --------------------
 
 	@VisibleForTesting
