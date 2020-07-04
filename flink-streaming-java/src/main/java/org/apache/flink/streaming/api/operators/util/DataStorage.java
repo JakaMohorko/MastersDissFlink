@@ -12,8 +12,8 @@ public class DataStorage<IN>{
 	long currentInterval = Long.MAX_VALUE;
 	long currentClosestTimestampOffset;
 	IN currentElement;
-	IN defaultElement;
 
+	IN defaultElement;
 	ArrayList<Tuple2<Long, IN>> interpolationBuffer = new ArrayList<>();
 	ArrayList<Tuple2<Long, IN>> collectionBuffer = new ArrayList<>();
 }

@@ -18,14 +18,16 @@
 package org.apache.flink.streaming.examples.windowing;
 
 import org.apache.flink.api.common.functions.ReduceFunction;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.functions.windowing.ApplyToArrayFunction;
-import org.apache.flink.streaming.api.operators.util.interpolators.LinearInterpolator;
+import org.apache.flink.streaming.api.operators.util.interpolators.KeyedLinearInterpolator;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
 import org.apache.flink.streaming.examples.wordcount.util.WordCountData;
@@ -49,7 +51,7 @@ import java.util.List;
  * <li>use basic windowing abstractions.
  * </ul>
  */
-public class TestArrayForming {
+public class TestArrayFormingKeyed {
 
 	// *************************************************************************
 	// PROGRAM
@@ -64,39 +66,37 @@ public class TestArrayForming {
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 		env.setParallelism(1);
 
-		final List<Tuple2<Long, Long>> input = new ArrayList<>();
+		final List<Tuple3<String, Long, Long>> input = new ArrayList<>();
 
-		input.add(new Tuple2<>(10L, 0L));
-		input.add(new Tuple2<>(12L, 5L));
-		//input.add(new Tuple2<>(25L, 10L));
-		//input.add(new Tuple2<>(16L, 16L));
-		//input.add(new Tuple2<>(22L, 21L));
-		//input.add(new Tuple2<>(21L, 24L));
-		input.add(new Tuple2<>(11L, 30L));
-		input.add(new Tuple2<>(14L, 33L));
-		input.add(new Tuple2<>(16L, 40L));
-		//input.add(new Tuple2<>(17L, 39L));
-		//input.add(new Tuple2<>(15L, 44L));
-		//input.add(new Tuple2<>(10L, 51L));
-		//input.add(new Tuple2<>(11L, 56L));
-		input.add(new Tuple2<>(13L, 59L));
-		input.add(new Tuple2<>(20L, 64L));
-		input.add(new Tuple2<>(27L, 70L));
-		input.add(new Tuple2<>(25L, 74L));
-		//input.add(new Tuple2<>(20L, 82L));
-		input.add(new Tuple2<>(21L, 85L));
-		input.add(new Tuple2<>(23L, 92L));
-		input.add(new Tuple2<>(16L, 99L));
-		input.add(new Tuple2<>(16L, 105L));
+		input.add(new Tuple3<>("1", 10L, 0L));
+		input.add(new Tuple3<>("0", 12L, 5L));
+		input.add(new Tuple3<>("1", 25L, 10L));
+		input.add(new Tuple3<>("0", 16L, 16L));
+		input.add(new Tuple3<>("1", 22L, 21L));
+		//input.add(new Tuple3<>("1",16L, 26L));
+		//input.add(new Tuple3<>("0",21L, 29L));
+		//input.add(new Tuple3<>("1",14L, 34L));
+		input.add(new Tuple3<>("0", 17L, 39L));
+		input.add(new Tuple3<>("1", 15L, 44L));
+		input.add(new Tuple3<>("0", 10L, 51L));
+		input.add(new Tuple3<>("1", 11L, 56L));
+		input.add(new Tuple3<>("0", 13L, 59L));
+		input.add(new Tuple3<>("1", 20L, 64L));
+		input.add(new Tuple3<>("0", 27L, 70L));
+		input.add(new Tuple3<>("1", 25L, 74L));
+		input.add(new Tuple3<>("0", 20L, 82L));
+		input.add(new Tuple3<>("1", 21L, 85L));
+		input.add(new Tuple3<>("0", 23L, 92L));
+		input.add(new Tuple3<>("1", 16L, 99L));
 
-		DataStream<Long> source = env
-			.addSource(new SourceFunction<Long>() {
+		DataStream<Tuple2<String, Long>> source = env
+			.addSource(new SourceFunction<Tuple2<String, Long>>() {
 				private static final long serialVersionUID = 1L;
 				@Override
-				public void run(SourceContext<Long> ctx) throws Exception {
-					for (Tuple2<Long, Long> value : input) {
-						ctx.collectWithTimestamp(value.f0, value.f1);
-						ctx.emitWatermark(new Watermark(value.f1 - 1));
+				public void run(SourceContext<Tuple2<String, Long>> ctx) throws Exception {
+					for (Tuple3<String, Long, Long> value : input) {
+						ctx.collectWithTimestamp(new Tuple2<>(value.f0, value.f1), value.f2);
+						ctx.emitWatermark(new Watermark(value.f2 - 1));
 					}
 					ctx.emitWatermark(new Watermark(Long.MAX_VALUE));
 				}
@@ -107,12 +107,22 @@ public class TestArrayForming {
 			});
 
 		env.getConfig().setGlobalJobParameters(params);
-		LinearInterpolator<Long> interpolator = new LinearInterpolator<>();
+		KeyedLinearInterpolator<Tuple2<String, Long>> interpolator = new KeyedLinearInterpolator<>();
 
-		DataStream<Long> counts =
+		DataStream<Tuple2<String, Long>> counts =
 			source
-				.resample(5L, 2, interpolator)
-				.countWindowAll(5)
+				.keyBy(new KeySelector<Tuple2<String, Long>, String>() {
+					public String getKey(Tuple2<String, Long> wc) {
+						return wc.f0;
+					}
+				})
+				.keyedResample(5L, 2, interpolator, 1)
+				.keyBy(new KeySelector<Tuple2<String, Long>, String>() {
+					public String getKey(Tuple2<String, Long> wc) {
+						return wc.f0;
+					}
+				})
+				.countWindow(5)
 				.toArrayStream()
 				.applyToArray(new MyApplyToArray());
 
@@ -135,15 +145,13 @@ public class TestArrayForming {
 	/**
 	 * Test class for array operations.
 	 */
-	public static class MyApplyToArray extends ApplyToArrayFunction<Byte, GlobalWindow, Long>{
+	public static class MyApplyToArray extends ApplyToArrayFunction<String, GlobalWindow, Tuple2<String, Long>>{
 		@Override
-		public ArrayList<Long> userFunction(ArrayList<Long> arr){
-			ArrayList<Long> out = new ArrayList<>();
-			for (long t : arr){
-				out.add(t + 5);
+		public ArrayList<Tuple2<String, Long>> userFunction(ArrayList<Tuple2<String, Long>> arr){
+			for (Tuple2<String, Long> t : arr){
+				t.f1 = t.f1 + 5L;
 			}
-			//System.out.println(arr);
-			return out;
+			return arr;
 		}
 	}
 }

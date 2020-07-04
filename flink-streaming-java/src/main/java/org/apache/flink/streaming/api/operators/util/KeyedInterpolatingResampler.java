@@ -60,6 +60,7 @@ public class KeyedInterpolatingResampler <I> implements Function, Serializable {
 			if (timestamp - currentInterval > Math.abs(timestamp - (currentInterval + samplingInterval))){
 
 				if (collectionBuffer.isEmpty()){
+					//System.out.println(currentElement + " " + currentInterval);
 					out.setAbsoluteTimestamp(currentInterval);
 					out.collect(currentElement);
 					out.emitWatermark(new Watermark(currentInterval - 1));
@@ -82,7 +83,7 @@ public class KeyedInterpolatingResampler <I> implements Function, Serializable {
 				currentClosestTimestampOffset = Math.abs(currentInterval - timestamp);
 			}
 		}
-		//System.out.print("Current Element: " + currentElement + " ");
+
 		//System.out.println("Collection buffer: " + collectionBuffer + " Current interval: " + currentInterval + " Current timestamp: " + timestamp + " Interpolation Buffer: " + interpolationBuffer);
 		if (interpolationBuffer.size() != interpolationBufferWindow){
 			interpolationBuffer.add(new Tuple2<>(timestamp, value));
@@ -94,7 +95,7 @@ public class KeyedInterpolatingResampler <I> implements Function, Serializable {
 						Math.abs(interpolationBuffer.get(0).f0 - collectionBuffer.get(0).f0)){
 						//System.out.println((I) interpolator.interpolate(interpolationBuffer, collectionBuffer.get(0).f0, typeClass));
 						I result = fieldAccessor.set(defaultElement, (I) interpolator.interpolate(interpolationBuffer, collectionBuffer.get(0).f0, typeClass, fieldAccessor));
-						//System.out.println(collectionBuffer.get(0).f0);
+						//System.out.println(result + " " + collectionBuffer.get(0).f0);
 						out.setAbsoluteTimestamp(collectionBuffer.get(0).f0);
 						out.collect(result);
 						out.emitWatermark(new Watermark(collectionBuffer.get(0).f0 - 1));
@@ -105,7 +106,7 @@ public class KeyedInterpolatingResampler <I> implements Function, Serializable {
 					}
 				}
 				else {
-					//System.out.println(collectionBuffer.get(0).f0);
+					//System.out.println(collectionBuffer.get(0).f1 + " " + collectionBuffer.get(0).f0);
 					out.setAbsoluteTimestamp(collectionBuffer.get(0).f0);
 					out.collect(collectionBuffer.get(0).f1);
 					out.emitWatermark(new Watermark(collectionBuffer.get(0).f0 - 1));

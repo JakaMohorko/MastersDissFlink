@@ -81,6 +81,7 @@ public class InterpolatingResampler <I> implements Function, Serializable {
 				if (collectionBuffer.get(0).f1 == null){
 					if (Math.abs(timestamp - collectionBuffer.get(0).f0) >
 						Math.abs(interpolationBuffer.get(0).f0 - collectionBuffer.get(0).f0)){
+
 						//System.out.println((I) interpolator.interpolate(interpolationBuffer, collectionBuffer.get(0).f0, typeClass));
 						out.emitWatermark(new Watermark(collectionBuffer.get(0).f0 - 1));
 						out.setAbsoluteTimestamp(collectionBuffer.get(0).f0);
