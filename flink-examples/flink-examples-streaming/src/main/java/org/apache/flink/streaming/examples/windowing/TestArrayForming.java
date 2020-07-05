@@ -111,7 +111,7 @@ public class TestArrayForming {
 
 		DataStream<Long> counts =
 			source
-				.resample(5L, 2, interpolator)
+				.resample(5L, interpolator)
 				.countWindowAll(5)
 				.toArrayStream()
 				.applyToArray(new MyApplyToArray());

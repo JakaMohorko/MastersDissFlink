@@ -1,6 +1,8 @@
 package org.apache.flink.streaming.api.operators.util.interpolators;
 
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.api.operators.TimestampedCollector;
+import org.apache.flink.streaming.api.watermark.Watermark;
 
 import java.util.ArrayList;
 
@@ -10,10 +12,12 @@ import java.util.ArrayList;
  */
 public class AveragingInterpolator <I> extends Interpolator <I> {
 
-	@Override
-	public Object interpolate(ArrayList<Tuple2<Long, I>> interpolationBuffer,
-							long intervalTimestamp, Class<?> typeClass) throws Exception{
+	public AveragingInterpolator(int interpolationBufferWindowSize){
+		super(interpolationBufferWindowSize);
+	}
 
+	@Override
+	public Object interpolate (long collectionTimestamp, Class<?> typeClass) throws Exception{
 		if (typeClass == Long.class){
 			long avg = 0;
 			for (Tuple2<Long, I> tup : interpolationBuffer){

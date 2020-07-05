@@ -9,7 +9,7 @@ import java.util.ArrayList;
  * @param <IN>
  */
 public class DataStorage<IN>{
-	long currentInterval = Long.MAX_VALUE;
+	long currentIntervalTimestamp = Long.MAX_VALUE;
 	long currentClosestTimestampOffset;
 	IN currentElement;
 

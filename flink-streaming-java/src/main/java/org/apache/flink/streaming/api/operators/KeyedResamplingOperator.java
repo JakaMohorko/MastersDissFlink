@@ -23,7 +23,7 @@ import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.operators.util.DataStorage;
-import org.apache.flink.streaming.api.operators.util.KeyedInterpolatingResampler;
+import org.apache.flink.streaming.api.operators.util.KeyedResampler;
 import org.apache.flink.streaming.api.operators.util.interpolators.KeyedInterpolator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.typeutils.FieldAccessor;
@@ -33,7 +33,7 @@ import org.apache.flink.streaming.util.typeutils.FieldAccessor;
  * @param <IN> Type of input
  */
 @Internal
-public class KeyedResamplingOperator<IN, KEY> extends AbstractUdfStreamOperator<IN, KeyedInterpolatingResampler<IN>> implements OneInputStreamOperator<IN, IN> {
+public class KeyedResamplingOperator<IN, KEY> extends AbstractUdfStreamOperator<IN, KeyedResampler<IN>> implements OneInputStreamOperator<IN, IN> {
 
 	private static final long serialVersionUID = 1L;
 
@@ -47,11 +47,11 @@ public class KeyedResamplingOperator<IN, KEY> extends AbstractUdfStreamOperator<
 
 	TypeSerializer<DataStorage<IN>> typeSerializer;
 
-	public KeyedResamplingOperator(long samplingInterval, int interpolationBufferWindow, KeyedInterpolator<IN> interpolator,
+	public KeyedResamplingOperator(long samplingInterval, KeyedInterpolator<IN> interpolator,
 							Class<?> typeClass, FieldAccessor<IN, Object> fieldAccessor, KeySelector<IN, KEY> keySelector,
 							TypeSerializer<DataStorage<IN>> typeSerializer){
 
-		super(new KeyedInterpolatingResampler<IN>(samplingInterval, interpolationBufferWindow, interpolator,
+		super(new KeyedResampler<IN>(samplingInterval, interpolator,
 			typeClass, fieldAccessor));
 
 		this.typeSerializer = typeSerializer;

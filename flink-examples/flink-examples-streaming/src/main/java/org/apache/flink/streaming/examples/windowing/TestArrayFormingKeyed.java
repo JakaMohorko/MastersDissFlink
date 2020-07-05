@@ -116,7 +116,7 @@ public class TestArrayFormingKeyed {
 						return wc.f0;
 					}
 				})
-				.keyedResample(5L, 2, interpolator, 1)
+				.keyedResample(5L, interpolator, 1)
 				.keyBy(new KeySelector<Tuple2<String, Long>, String>() {
 					public String getKey(Tuple2<String, Long> wc) {
 						return wc.f0;

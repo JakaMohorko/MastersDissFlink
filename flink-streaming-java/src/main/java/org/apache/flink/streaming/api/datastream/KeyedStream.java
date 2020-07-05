@@ -53,7 +53,6 @@ import org.apache.flink.streaming.api.graph.StreamGraphGenerator;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.KeyedResamplingOperator;
 import org.apache.flink.streaming.api.operators.LegacyKeyedProcessOperator;
-import org.apache.flink.streaming.api.operators.ResamplingOperator;
 import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamGroupedFold;
 import org.apache.flink.streaming.api.operators.StreamGroupedReduce;
@@ -1106,13 +1105,7 @@ public class KeyedStream<T, KEY> extends DataStream<T> {
 	}
 
 	@SuppressWarnings({ "unchecked" })
-	public <R> SingleOutputStreamOperator<R> keyedResample(long samplingInterval, R defaultValue) {
-		return doTransform("Resample", (TypeInformation<R>) getType(),
-			SimpleOperatorFactory.of(new ResamplingOperator<R>(samplingInterval, defaultValue)));
-	}
-
-	@SuppressWarnings({ "unchecked" })
-	public <R> SingleOutputStreamOperator<R> keyedResample(long samplingInterval, int interpolationBuffer,
+	public <R> SingleOutputStreamOperator<R> keyedResample(long samplingInterval,
 						KeyedInterpolator<R> interpolator, int dataField) {
 
 		FieldAccessor<R, Object> fieldAccessor = FieldAccessorFactory.getAccessor((TypeInformation<R>) getType(),
@@ -1120,9 +1113,8 @@ public class KeyedStream<T, KEY> extends DataStream<T> {
 
 		TypeSerializer<DataStorage<R>> dataType = TypeInformation.of(new TypeHint<DataStorage<R>>(){}).createSerializer(getExecutionConfig());
 
-		KeyedResamplingOperator<R, KEY> resamplingOperator = new KeyedResamplingOperator<>(samplingInterval,
-			interpolationBuffer, interpolator, fieldAccessor.getFieldType().getTypeClass(), fieldAccessor,
-			(KeySelector<R, KEY>) keySelector, dataType);
+		KeyedResamplingOperator<R, KEY> resamplingOperator = new KeyedResamplingOperator<>(samplingInterval, interpolator,
+			fieldAccessor.getFieldType().getTypeClass(), fieldAccessor, (KeySelector<R, KEY>) keySelector, dataType);
 
 		return doTransform("Resample", (TypeInformation<R>) getType(),
 			SimpleOperatorFactory.of(resamplingOperator));

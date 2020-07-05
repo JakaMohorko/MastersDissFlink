@@ -10,10 +10,14 @@ import java.util.ArrayList;
  * @param <I> Input type
  */
 public class KeyedLinearInterpolator <I> extends KeyedInterpolator <I> {
+	
+	public KeyedLinearInterpolator(){
+		super(2);
+	}
 
 	@Override
-	public Object interpolate(ArrayList<Tuple2<Long, I>> interpolationBuffer, long intervalTimestamp,
-								Class<?> typeClass, FieldAccessor<I, Object> fieldAccessor) throws Exception{
+	public Object interpolate(long collectionTimestamp, Class<?> typeClass, 
+							  FieldAccessor<I, Object> fieldAccessor) throws Exception{
 
 		if (interpolationBuffer.size() != 2){
 			throw new Exception("Buffer size of linear interpolators should be 2.");
@@ -26,35 +30,35 @@ public class KeyedLinearInterpolator <I> extends KeyedInterpolator <I> {
 			long y2 = (long) fieldAccessor.get(interpolationBuffer.get(1).f1);
 
 			float gradient = (float) (y1 - y2) / (float) (x1 - x2);
-			return (long) (gradient * (intervalTimestamp - x1) + y1);
+			return (long) (gradient * (collectionTimestamp - x1) + y1);
 		}
 		else if (typeClass == Integer.class){
 			int y1 = (int) fieldAccessor.get(interpolationBuffer.get(0).f1);
 			int y2 = (int) fieldAccessor.get(interpolationBuffer.get(1).f1);
 
 			float gradient = (float) (y1 - y2) / (float) (x1 - x2);
-			return (int) (gradient * (intervalTimestamp - x1) + y1);
+			return (int) (gradient * (collectionTimestamp - x1) + y1);
 		}
 		else if (typeClass == Float.class){
 			float y1 = (float) fieldAccessor.get(interpolationBuffer.get(0).f1);
 			float y2 = (float) fieldAccessor.get(interpolationBuffer.get(1).f1);
 
 			float gradient = (y1 - y2) / (float) (x1 - x2);
-			return (gradient * (intervalTimestamp - x1) + y1);
+			return (gradient * (collectionTimestamp - x1) + y1);
 		}
 		else if (typeClass == Double.class){
 			double y1 = (double) fieldAccessor.get(interpolationBuffer.get(0).f1);
 			double y2 = (double) fieldAccessor.get(interpolationBuffer.get(1).f1);
 
 			float gradient = (float) (y1 - y2) / (float) (x1 - x2);
-			return (double) (gradient * (intervalTimestamp - x1) + y1);
+			return (double) (gradient * (collectionTimestamp - x1) + y1);
 		}
 		else if (typeClass == Short.class){
 			short y1 = (short) fieldAccessor.get(interpolationBuffer.get(0).f1);
 			short y2 = (short) fieldAccessor.get(interpolationBuffer.get(1).f1);
 
 			float gradient = (float) (y1 - y2) / (float) (x1 - x2);
-			return (short) (gradient * (intervalTimestamp - x1) + y1);
+			return (short) (gradient * (collectionTimestamp - x1) + y1);
 		}
 		else {
 			throw new Exception("Value type is non-numeric. Linear interpolator cannot be used.");

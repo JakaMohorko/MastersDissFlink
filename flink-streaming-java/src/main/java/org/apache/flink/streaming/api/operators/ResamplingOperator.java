@@ -18,22 +18,23 @@
 package org.apache.flink.streaming.api.operators;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.streaming.api.operators.util.Resampler;
+import org.apache.flink.streaming.api.operators.util.AllResampler;
+import org.apache.flink.streaming.api.operators.util.interpolators.Interpolator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 /**
- * Resampling for array creation with default value and no interpolation.
+ * Resampling for array creation with interpolation.
  * @param <IN> Type of input
  */
 @Internal
-public class ResamplingOperator<IN> extends AbstractUdfStreamOperator<IN, Resampler<IN>> implements OneInputStreamOperator<IN, IN> {
+public class ResamplingOperator<IN> extends AbstractUdfStreamOperator<IN, AllResampler<IN>> implements OneInputStreamOperator<IN, IN> {
 
 	private static final long serialVersionUID = 1L;
 
 	private transient TimestampedCollector<IN> collector;
 
-	public ResamplingOperator(long samplingInterval, IN defaultValue){
-		super(new Resampler<IN>(samplingInterval, defaultValue));
+	public ResamplingOperator(long samplingInterval, Interpolator<IN> interpolator, Class<?> typeClass){
+		super(new AllResampler<IN>(samplingInterval, interpolator, typeClass));
 		chainingStrategy = ChainingStrategy.ALWAYS;
 	}
 

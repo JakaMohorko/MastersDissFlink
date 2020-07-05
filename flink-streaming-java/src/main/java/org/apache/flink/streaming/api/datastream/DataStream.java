@@ -60,11 +60,10 @@ import org.apache.flink.streaming.api.functions.sink.OutputFormatSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.sink.SocketClientSink;
-import org.apache.flink.streaming.api.operators.InterpolatingResamplingOperator;
+import org.apache.flink.streaming.api.operators.ResamplingOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
-import org.apache.flink.streaming.api.operators.ResamplingOperator;
 import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamFilter;
 import org.apache.flink.streaming.api.operators.StreamFlatMap;
@@ -1304,15 +1303,11 @@ public class DataStream<T> {
 		return sink;
 	}
 
-	@SuppressWarnings({ "unchecked" })
-	public <R> SingleOutputStreamOperator<R> resample(long samplingInterval, R def) {
-		return doTransform("Resample", (TypeInformation<R>) getType(), SimpleOperatorFactory.of(new ResamplingOperator<R>(samplingInterval, def)));
-	}
 
 	@SuppressWarnings({ "unchecked" })
-	public <R> SingleOutputStreamOperator<R> resample(long samplingInterval, int interpolationBuffer, Interpolator<R> interpolator) {
-		InterpolatingResamplingOperator<R> interpolatingResamplingOperator = new InterpolatingResamplingOperator<R>(samplingInterval, interpolationBuffer, interpolator, getType().getTypeClass());
-		return doTransform("Resample", (TypeInformation<R>) getType(), SimpleOperatorFactory.of(interpolatingResamplingOperator));
+	public <R> SingleOutputStreamOperator<R> resample(long samplingInterval, Interpolator<R> interpolator) {
+		ResamplingOperator<R> resamplingOperator = new ResamplingOperator<R>(samplingInterval, interpolator, getType().getTypeClass());
+		return doTransform("Resample", (TypeInformation<R>) getType(), SimpleOperatorFactory.of(resamplingOperator));
 	}
 
 	/**
