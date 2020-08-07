@@ -107,6 +107,9 @@ public class AllWindowedStream<T, W extends Window> {
 	/** The user-specified allowed lateness. */
 	private long allowedLateness = 0L;
 
+	private long slideSize;
+	private long windowSize;
+
 	/**
 	 * Side output {@code OutputTag} for late data. If no tag is set late data will simply be dropped.
 	 */
@@ -131,6 +134,16 @@ public class AllWindowedStream<T, W extends Window> {
 
 		this.trigger = trigger;
 		return this;
+	}
+
+	@PublicEvolving
+	public AllWindowedStream(DataStream<T> input,
+	                         WindowAssigner<? super T, W> windowAssigner, long windowSize, long slideSize) {
+		this.input = input.keyBy(new NullByteKeySelector<T>());
+		this.windowAssigner = windowAssigner;
+		this.trigger = windowAssigner.getDefaultTrigger(input.getExecutionEnvironment());
+		this.windowSize = windowSize;
+		this.slideSize = slideSize;
 	}
 
 	/**
@@ -1556,12 +1569,22 @@ public class AllWindowedStream<T, W extends Window> {
 
 	public ArrayWindowedStream<T, Byte, W> toArrayStream() {
 		return new ArrayWindowedStream<T, Byte, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
-			null);
+			evictor);
 	}
 
 	public ArrayWindowedStream<T, Byte, W> toArrayStream(Evictor<? super T, ? super W> evictor) {
 		return new ArrayWindowedStream<T, Byte, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
 			evictor);
+	}
+
+	public ArrayWindowedStream<T, Byte, W> toArrayStreamSliding() {
+		return new ArrayWindowedStream<T, Byte, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
+			evictor, windowSize, slideSize);
+	}
+
+	public ArrayWindowedStream<T, Byte, W> toArrayStreamMatrix(long windowSize, long numKeys, KeySelector<T, Integer> matrixKey) {
+		return new ArrayWindowedStream<T, Byte, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
+					windowSize, numKeys, matrixKey);
 	}
 
 	private SingleOutputStreamOperator<T> aggregate(AggregationFunction<T> aggregator) {

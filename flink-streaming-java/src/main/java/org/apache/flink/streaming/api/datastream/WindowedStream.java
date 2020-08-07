@@ -122,12 +122,25 @@ public class WindowedStream<T, K, W extends Window> {
  	 */
 	private OutputTag<T> lateDataOutputTag;
 
+	private long slideSize;
+	private long windowSize;
+
 	@PublicEvolving
 	public WindowedStream(KeyedStream<T, K> input,
 			WindowAssigner<? super T, W> windowAssigner) {
 		this.input = input;
 		this.windowAssigner = windowAssigner;
 		this.trigger = windowAssigner.getDefaultTrigger(input.getExecutionEnvironment());
+	}
+
+	@PublicEvolving
+	public WindowedStream(KeyedStream<T, K> input,
+	                      WindowAssigner<? super T, W> windowAssigner, long windowSize, long slideSize) {
+		this.input = input;
+		this.windowAssigner = windowAssigner;
+		this.trigger = windowAssigner.getDefaultTrigger(input.getExecutionEnvironment());
+		this.slideSize = slideSize;
+		this.windowSize = windowSize;
 	}
 
 	/**
@@ -1541,12 +1554,17 @@ public class WindowedStream<T, K, W extends Window> {
 
 	public ArrayWindowedStream<T, K, W> toArrayStream() {
 		return new ArrayWindowedStream<T, K, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
-			null);
+			evictor);
 	}
 
 	public ArrayWindowedStream<T, K, W> toArrayStream(Evictor<? super T, ? super W> evictor) {
 		return new ArrayWindowedStream<T, K, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
 												evictor);
+	}
+
+	public ArrayWindowedStream<T, K, W> toArrayStreamSliding() {
+		return new ArrayWindowedStream<T, K, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
+			evictor, windowSize, slideSize);
 	}
 
 	// -------------------- Testing Methods --------------------

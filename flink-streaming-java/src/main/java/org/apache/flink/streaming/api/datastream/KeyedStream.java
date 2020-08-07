@@ -663,6 +663,17 @@ public class KeyedStream<T, KEY> extends DataStream<T> {
 		return window(GlobalWindows.create()).trigger(PurgingTrigger.of(CountTrigger.of(size)));
 	}
 
+	public WindowedStream<T, KEY, GlobalWindow> countWindowSlide(long size, long slide) {
+		return windowSlide(GlobalWindows.create(), size, slide).trigger(CountTrigger.of(slide));
+	}
+
+	@PublicEvolving
+	public <W extends Window> WindowedStream<T, KEY, W> windowSlide(WindowAssigner<? super T, W> assigner, long windowSize, long slideSize) {
+		return new WindowedStream<>(this, assigner, windowSize, slideSize);
+	}
+
+
+
 	/**
 	 * Windows this {@code KeyedStream} into sliding count windows.
 	 *
@@ -1104,19 +1115,62 @@ public class KeyedStream<T, KEY> extends DataStream<T> {
 				getKeyType().createSerializer(getExecutionConfig()));
 	}
 
-	@SuppressWarnings({ "unchecked" })
-	public <R> SingleOutputStreamOperator<R> keyedResample(long samplingInterval,
-						KeyedInterpolator<R> interpolator, int dataField) {
+	public KeyedStream<T, KEY> keyedResample(long samplingInterval,
+						KeyedInterpolator<T> interpolator, int dataField) {
 
-		FieldAccessor<R, Object> fieldAccessor = FieldAccessorFactory.getAccessor((TypeInformation<R>) getType(),
+		FieldAccessor<T, Object> fieldAccessor = FieldAccessorFactory.getAccessor(getType(),
 			dataField, getExecutionConfig());
 
-		TypeSerializer<DataStorage<R>> dataType = TypeInformation.of(new TypeHint<DataStorage<R>>(){}).createSerializer(getExecutionConfig());
+		TypeSerializer<DataStorage<T>> dataType = TypeInformation.of(new TypeHint<DataStorage<T>>(){}).createSerializer(getExecutionConfig());
 
-		KeyedResamplingOperator<R, KEY> resamplingOperator = new KeyedResamplingOperator<>(samplingInterval, interpolator,
-			fieldAccessor.getFieldType().getTypeClass(), fieldAccessor, (KeySelector<R, KEY>) keySelector, dataType);
+		KeyedResamplingOperator<T, KEY> resamplingOperator = new KeyedResamplingOperator<>(samplingInterval, interpolator,
+			fieldAccessor.getFieldType().getTypeClass(), fieldAccessor, keySelector, dataType);
 
-		return doTransform("Resample", (TypeInformation<R>) getType(),
+		return doTransform("Resample",  getType(),
+			SimpleOperatorFactory.of(resamplingOperator)).keyBy(keySelector);
+	}
+
+	public KeyedStream<T, KEY> keyedResample(long samplingInterval, KeyedInterpolator<T> interpolator,
+															int dataField, long samplingWindow) {
+
+		FieldAccessor<T, Object> fieldAccessor = FieldAccessorFactory.getAccessor(getType(),
+			dataField, getExecutionConfig());
+
+		TypeSerializer<DataStorage<T>> dataType = TypeInformation.of(new TypeHint<DataStorage<T>>(){}).createSerializer(getExecutionConfig());
+
+		KeyedResamplingOperator<T, KEY> resamplingOperator = new KeyedResamplingOperator<>(samplingInterval, interpolator,
+			fieldAccessor.getFieldType().getTypeClass(), fieldAccessor, keySelector, dataType, samplingWindow);
+
+		return doTransform("Resample", getType(),
+			SimpleOperatorFactory.of(resamplingOperator)).keyBy(keySelector);
+	}
+
+	public SingleOutputStreamOperator<T> resample(long samplingInterval,
+											KeyedInterpolator<T> interpolator, int dataField) {
+		FieldAccessor<T, Object> fieldAccessor = FieldAccessorFactory.getAccessor(getType(),
+			dataField, getExecutionConfig());
+
+		TypeSerializer<DataStorage<T>> dataType = TypeInformation.of(new TypeHint<DataStorage<T>>(){}).createSerializer(getExecutionConfig());
+
+		KeyedResamplingOperator<T, KEY> resamplingOperator = new KeyedResamplingOperator<>(samplingInterval, interpolator,
+			fieldAccessor.getFieldType().getTypeClass(), fieldAccessor, keySelector, dataType);
+
+		return doTransform("Resample",  getType(),
+			SimpleOperatorFactory.of(resamplingOperator));
+	}
+
+	public SingleOutputStreamOperator<T> resample(long samplingInterval, KeyedInterpolator<T> interpolator,
+	                                         int dataField, long samplingWindow) {
+
+		FieldAccessor<T, Object> fieldAccessor = FieldAccessorFactory.getAccessor(getType(),
+			dataField, getExecutionConfig());
+
+		TypeSerializer<DataStorage<T>> dataType = TypeInformation.of(new TypeHint<DataStorage<T>>(){}).createSerializer(getExecutionConfig());
+
+		KeyedResamplingOperator<T, KEY> resamplingOperator = new KeyedResamplingOperator<>(samplingInterval, interpolator,
+			fieldAccessor.getFieldType().getTypeClass(), fieldAccessor, keySelector, dataType, samplingWindow);
+
+		return doTransform("Resample", getType(),
 			SimpleOperatorFactory.of(resamplingOperator));
 	}
 }

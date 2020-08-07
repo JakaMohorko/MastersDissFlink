@@ -1,13 +1,14 @@
 package org.apache.flink.streaming.api.operators.util;
 
+import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.operators.TimestampedCollector;
-import org.apache.flink.streaming.api.operators.util.interpolators.Interpolator;
 import org.apache.flink.streaming.api.watermark.Watermark;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public abstract class Resampler <I> {
+public abstract class Resampler <I> implements Function, Serializable {
 	long currentIntervalTimestamp = Long.MAX_VALUE;
 	long samplingInterval;
 	long currentClosestTimestampOffset;
@@ -57,7 +58,7 @@ public abstract class Resampler <I> {
 			}
 
 		}
-		else{
+		else {
 			if (timestamp - currentIntervalTimestamp > Math.abs(timestamp - (currentIntervalTimestamp + samplingInterval))) {
 
 				if (currentElement == null){

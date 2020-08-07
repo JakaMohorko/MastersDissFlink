@@ -19,6 +19,7 @@
 package org.apache.flink.streaming.api.functions.windowing;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
 import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.util.Collector;
@@ -29,21 +30,17 @@ import java.util.ArrayList;
  * A {@link WindowFunction} that just emits each input element.
  */
 @Internal
-public class ApplyToArrayFunction<K, W extends Window, T, O> implements WindowFunction<T, O, K, W> {
+public class ApplyToSlidingArrayFunction<K, W extends Window, T, O> implements SlidingWindowFunction<T, O, K, W> {
 
 	private static final long serialVersionUID = 1L;
 
 	@Override
-	public void apply(K k, W window, Iterable<T> input, Collector<O> out) throws Exception {
-		ArrayList<O>  processedData = userFunction(Lists.newArrayList(input));
-
-		for (O data: processedData) {
-			out.collect(data);
-		}
-
+	public Tuple2<ArrayList<O>, ArrayList<O>> apply(K k, W window, ArrayList<O> outputPrevious, ArrayList<T> input) throws Exception {
+		return userFunction(outputPrevious, input);
 	}
 
-	public ArrayList<O> userFunction(ArrayList<T> arr){
-		return new ArrayList<O>();
+
+	public Tuple2<ArrayList<O>, ArrayList<O>> userFunction(ArrayList<O> outputPrevious, ArrayList<T> input){
+		return new Tuple2<>();
 	}
 }

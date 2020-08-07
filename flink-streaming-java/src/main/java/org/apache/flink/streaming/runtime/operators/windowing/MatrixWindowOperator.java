@@ -27,6 +27,9 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.internal.InternalListState;
+import org.apache.flink.shaded.guava18.com.google.common.base.Function;
+import org.apache.flink.shaded.guava18.com.google.common.collect.FluentIterable;
+import org.apache.flink.shaded.guava18.com.google.common.collect.Iterables;
 import org.apache.flink.streaming.api.operators.InternalTimer;
 import org.apache.flink.streaming.api.windowing.assigners.MergingWindowAssigner;
 import org.apache.flink.streaming.api.windowing.assigners.WindowAssigner;
@@ -38,12 +41,9 @@ import org.apache.flink.streaming.runtime.operators.windowing.functions.Internal
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.util.OutputTag;
 
-import org.apache.flink.shaded.guava18.com.google.common.base.Function;
-import org.apache.flink.shaded.guava18.com.google.common.collect.FluentIterable;
-import org.apache.flink.shaded.guava18.com.google.common.collect.Iterables;
-
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -52,7 +52,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  *
  * <p>The {@code Evictor} is used to remove elements from a pane before/after the evaluation of
  * {@link InternalWindowFunction} and after the window evaluation gets triggered by a
- * {@link org.apache.flink.streaming.api.windowing.triggers.Trigger}.
+ * {@link Trigger}.
  *
  * @param <K> The type of key returned by the {@code KeySelector}.
  * @param <IN> The type of the incoming elements.
@@ -60,16 +60,13 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * @param <W> The type of {@code Window} that the {@code WindowAssigner} assigns.
  */
 @Internal
-public class ArrayWindowOperator<K, IN, OUT, W extends Window>
-	extends WindowOperator<K, IN, Iterable<IN>, OUT, W> {
+public class MatrixWindowOperator<K, IN, OUT, W extends Window>
+	extends WindowOperator<K, IN, ArrayList<ArrayList<IN>>, OUT, W> {
 
 	private static final long serialVersionUID = 1L;
 
-	private long slideRemainingElements = -1L;
 	// ------------------------------------------------------------------------
 	// these fields are set by the API stream graph builder to configure the operator
-
-	private final Evictor<? super IN, ? super W> evictor;
 
 	private final StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> evictingWindowStateDescriptor;
 
@@ -80,27 +77,33 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 
 	private transient InternalListState<K, W, StreamRecord<IN>> evictingWindowState;
 
+	private long windowSize;
+	private long keyNum;
+	private KeySelector<IN, Integer> matrixKey;
+
 	// ------------------------------------------------------------------------
 
 
-	public ArrayWindowOperator(WindowAssigner<? super IN, W> windowAssigner,
-	                           TypeSerializer<W> windowSerializer,
-	                           KeySelector<IN, K> keySelector,
-	                           TypeSerializer<K> keySerializer,
-	                           StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
-	                           InternalWindowFunction<Iterable<IN>, OUT, K, W> windowFunction,
-	                           Trigger<? super IN, ? super W> trigger,
-	                           Evictor<? super IN, ? super W> evictor,
-	                           long allowedLateness,
-	                           OutputTag<IN> lateDataOutputTag,
-	                           long slideRemainingElements) {
+	public MatrixWindowOperator(WindowAssigner<? super IN, W> windowAssigner,
+	                            TypeSerializer<W> windowSerializer,
+	                            KeySelector<IN, K> keySelector,
+	                            TypeSerializer<K> keySerializer,
+	                            StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
+	                            InternalWindowFunction<ArrayList<ArrayList<IN>>, OUT, K, W> windowFunction,
+	                            Trigger<? super IN, ? super W> trigger,
+	                            long allowedLateness,
+	                            OutputTag<IN> lateDataOutputTag,
+	                            long windowSize,
+	                            long keyNum,
+	                            KeySelector<IN, Integer> matrixKey) {
 
 		super(windowAssigner, windowSerializer, keySelector,
 			keySerializer, null, windowFunction, trigger, allowedLateness, lateDataOutputTag);
 
-		this.evictor = evictor;
 		this.evictingWindowStateDescriptor = checkNotNull(windowStateDescriptor);
-		this.slideRemainingElements = slideRemainingElements;
+		this.keyNum = keyNum;
+		this.windowSize = windowSize;
+		this.matrixKey = matrixKey;
 	}
 
 	@Override
@@ -341,66 +344,36 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 
 	private void emitWindowContents(W window, Iterable<StreamRecord<IN>> contents, ListState<StreamRecord<IN>> windowState) throws Exception {
 		timestampedCollector.setAbsoluteTimestamp(window.maxTimestamp());
-		if (evictor != null){
-
-			// Work around type system restrictions...
-			FluentIterable<TimestampedValue<IN>> recordsWithTimestamp = FluentIterable
-				.from(contents)
-				.transform(new Function<StreamRecord<IN>, TimestampedValue<IN>>() {
-					@Override
-					public TimestampedValue<IN> apply(StreamRecord<IN> input) {
-						return TimestampedValue.from(input);
-					}
-				});
-
-			evictorContext.evictBefore(recordsWithTimestamp, Iterables.size(recordsWithTimestamp));
-
-			FluentIterable<IN> projectedContents = recordsWithTimestamp
-				.transform(new Function<TimestampedValue<IN>, IN>() {
-					@Override
-					public IN apply(TimestampedValue<IN> input) {
-						return input.getValue();
-					}
-				});
-
-			processContext.window = triggerContext.window;
-			userFunction.process(triggerContext.key, triggerContext.window, processContext, projectedContents, timestampedCollector);
-			evictorContext.evictAfter(recordsWithTimestamp, Iterables.size(recordsWithTimestamp));
-			//work around to fix FLINK-4369, remove the evicted elements from the windowState.
-			//this is inefficient, but there is no other way to remove elements from ListState, which is an AppendingState.
-			windowState.clear();
-			for (TimestampedValue<IN> record : recordsWithTimestamp) {
-				windowState.add(record.getStreamRecord());
-			}
+		//System.out.println("key number: " + keyNum + " window size: " + windowSize);
+		ArrayList<ArrayList<IN>> matrixForm = new ArrayList<>();
+		for (int x = 0; x < keyNum; x++){
+			matrixForm.add(new ArrayList<>());
 		}
-		else {
-			Iterable<IN> arrayForm = createArray(contents);
-			processContext.window = triggerContext.window;
-			userFunction.process(triggerContext.key, triggerContext.window, processContext, arrayForm, timestampedCollector);
 
-			if (slideRemainingElements != -1){
-				ArrayList<StreamRecord<IN>> arr = (ArrayList<StreamRecord<IN>>) contents;
+		ArrayList<StreamRecord<IN>> remainingRecords = new ArrayList<>();
+		//System.out.println(contents);
 
-				if (arr.size() > slideRemainingElements){
-					windowState.clear();
-					for (int x = arr.size() - (int) slideRemainingElements; x < arr.size(); x++){
-						windowState.add(arr.get(x));
-					}
+		try {
+			for (StreamRecord<IN> it : contents) {
+				IN val = it.getValue();
+				if(matrixForm.get(matrixKey.getKey(val)).size() < windowSize){
+					//System.out.println("Key: " + matrixKey.getKey(val) + " Element: " + val);
+					matrixForm.get( matrixKey.getKey(val) ).add(val);
+				}
+				else {
+					remainingRecords.add(it);
 				}
 			}
-
 		}
-	}
-
-
-	private Iterable<IN> createArray(Iterable<StreamRecord<IN>> contents){
-		ArrayList<IN> arr = new ArrayList<>();
-		for (StreamRecord<IN> it : contents){
-			arr.add(it.getValue());
+		catch (Exception e){
+			e.printStackTrace();
 		}
-		return arr;
-	}
+		processContext.window = triggerContext.window;
+		userFunction.process(triggerContext.key, triggerContext.window, processContext, matrixForm, timestampedCollector);
 
+		windowState.clear();
+		windowState.addAll(remainingRecords);
+	}
 
 	private void clearAllState(
 		W window,
@@ -444,21 +417,23 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 
 		@Override
 		public MetricGroup getMetricGroup() {
-			return ArrayWindowOperator.this.getMetricGroup();
+			return MatrixWindowOperator.this.getMetricGroup();
 		}
 
 		public K getKey() {
 			return key;
 		}
 
-		void evictBefore(Iterable<TimestampedValue<IN>> elements, int size) {
+	/*	void evictBefore(Iterable<TimestampedValue<IN>> elements, int size) {
 			evictor.evictBefore((Iterable) elements, size, window, this);
 		}
 
 		void evictAfter(Iterable<TimestampedValue<IN>>  elements, int size) {
 			evictor.evictAfter((Iterable) elements, size, window, this);
 		}
+	*/
 	}
+
 
 	@Override
 	public void open() throws Exception {
@@ -487,13 +462,8 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 
 	@VisibleForTesting
 	public Evictor<? super IN, ? super W> getEvictor() {
-		return evictor;
+		return null;
 	}
 
-	@Override
-	@VisibleForTesting
-	@SuppressWarnings("unchecked, rawtypes")
-	public StateDescriptor<? extends AppendingState<IN, Iterable<IN>>, ?> getStateDescriptor() {
-		return (StateDescriptor<? extends AppendingState<IN, Iterable<IN>>, ?>) evictingWindowStateDescriptor;
-	}
+
 }

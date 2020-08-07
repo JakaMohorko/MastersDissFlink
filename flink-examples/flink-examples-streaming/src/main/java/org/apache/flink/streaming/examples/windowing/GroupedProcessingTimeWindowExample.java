@@ -94,17 +94,17 @@ public class GroupedProcessingTimeWindowExample {
 		}
 	}
 
+	/**
+	 * test.
+	 */
 	public static class TestProcessFunction extends ProcessWindowFunction<Tuple2<Long, Long>, Tuple2<Long, Long>, Long, TimeWindow>{
 
 		@Override
 		public void process(Long key, Context ctx, Iterable<Tuple2<Long, Long>> values, Collector<Tuple2<Long, Long>> out){
-			int counter = 0;
 
 			for (Tuple2<Long, Long> v : values){
 				out.collect(v);
-				counter++;
 			}
-			System.out.println(counter);
 		}
 
 	}
@@ -129,8 +129,8 @@ public class GroupedProcessingTimeWindowExample {
 
 			final long startTime = System.currentTimeMillis();
 
-			final long numElements = 200000;
-			final long numKeys = 10000;
+			final long numElements = 10000000;
+			final long numKeys = 1;
 			long val = 1L;
 			long count = 0L;
 

@@ -21,27 +21,29 @@ package org.apache.flink.streaming.runtime.operators.windowing.functions;
 import org.apache.flink.api.common.functions.IterationRuntimeContext;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.java.operators.translation.WrappingFunction;
-import org.apache.flink.streaming.api.functions.windowing.SlidingWindowFunction;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
+import org.apache.flink.streaming.api.functions.windowing.WindowMatrixFunction;
 import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.util.Collector;
+
+import java.util.ArrayList;
 
 /**
  * Internal window function for wrapping a {@link WindowFunction} that takes an {@code Iterable}
  * when the window state also is an {@code Iterable}.
  */
-public final class InternalIterableWindowFunction<IN, OUT, KEY, W extends Window>
-		extends WrappingFunction<WindowFunction<IN, OUT, KEY, W>>
-		implements InternalWindowFunction<Iterable<IN>, OUT, KEY, W> {
+public final class InternalIterableMatrixWindowFunction<IN, OUT, KEY, W extends Window>
+		extends WrappingFunction<WindowMatrixFunction<IN, OUT, KEY, W>>
+		implements InternalWindowFunction<ArrayList<ArrayList<IN>>, OUT, KEY, W> {
 
 	private static final long serialVersionUID = 1L;
 
-	public InternalIterableWindowFunction(WindowFunction<IN, OUT, KEY, W> wrappedFunction) {
+	public InternalIterableMatrixWindowFunction(WindowMatrixFunction<IN, OUT, KEY, W> wrappedFunction) {
 		super(wrappedFunction);
 	}
 
 	@Override
-	public void process(KEY key, W window, InternalWindowContext context, Iterable<IN> input, Collector<OUT> out) throws Exception {
+	public void process(KEY key, W window, InternalWindowContext context, ArrayList<ArrayList<IN>> input, Collector<OUT> out) throws Exception {
 		wrappedFunction.apply(key, window, input, out);
 	}
 

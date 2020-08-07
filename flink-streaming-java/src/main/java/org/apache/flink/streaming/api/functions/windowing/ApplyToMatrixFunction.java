@@ -19,31 +19,35 @@
 package org.apache.flink.streaming.api.functions.windowing;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
 import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.util.Collector;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * A {@link WindowFunction} that just emits each input element.
  */
 @Internal
-public class ApplyToArrayFunction<K, W extends Window, T, O> implements WindowFunction<T, O, K, W> {
+public class ApplyToMatrixFunction<K, W extends Window, T, O> implements WindowMatrixFunction<T, O, K, W> {
 
 	private static final long serialVersionUID = 1L;
 
 	@Override
-	public void apply(K k, W window, Iterable<T> input, Collector<O> out) throws Exception {
-		ArrayList<O>  processedData = userFunction(Lists.newArrayList(input));
+	public void apply(K k, W window, ArrayList<ArrayList<T>> matrix, Collector<O> out) throws Exception {
 
-		for (O data: processedData) {
-			out.collect(data);
+		ArrayList<ArrayList<O>>  processedData = userFunction(matrix);
+
+		for (int x = 0; x < processedData.get(0).size(); x++) {
+			for (ArrayList<O> dat : processedData){
+				out.collect(dat.get(x));
+			}
 		}
-
 	}
 
-	public ArrayList<O> userFunction(ArrayList<T> arr){
-		return new ArrayList<O>();
+	public ArrayList<ArrayList<O>> userFunction(ArrayList<ArrayList<T>>  matrix){
+		return new ArrayList<ArrayList<O>>();
 	}
 }

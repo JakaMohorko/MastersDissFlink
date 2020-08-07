@@ -59,6 +59,18 @@ public class KeyedResamplingOperator<IN, KEY> extends AbstractUdfStreamOperator<
 		chainingStrategy = ChainingStrategy.ALWAYS;
 	}
 
+	public KeyedResamplingOperator(long samplingInterval, KeyedInterpolator<IN> interpolator,
+							Class<?> typeClass, FieldAccessor<IN, Object> fieldAccessor, KeySelector<IN, KEY> keySelector,
+							TypeSerializer<DataStorage<IN>> typeSerializer, long samplingWindow) {
+
+		super(new KeyedResampler<IN>(samplingInterval, interpolator,
+			typeClass, fieldAccessor, samplingWindow));
+
+		this.typeSerializer = typeSerializer;
+		this.keySelector = keySelector;
+		chainingStrategy = ChainingStrategy.ALWAYS;
+	}
+
 	@Override
 	public void open() throws Exception {
 		super.open();

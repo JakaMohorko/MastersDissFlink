@@ -38,6 +38,11 @@ public class ResamplingOperator<IN> extends AbstractUdfStreamOperator<IN, AllRes
 		chainingStrategy = ChainingStrategy.ALWAYS;
 	}
 
+	public ResamplingOperator(long samplingInterval, Interpolator<IN> interpolator, Class<?> typeClass, long samplingWindow){
+		super(new AllResampler<IN>(samplingInterval, interpolator, typeClass, samplingWindow));
+		chainingStrategy = ChainingStrategy.ALWAYS;
+	}
+
 	@Override
 	public void open() throws Exception {
 		super.open();

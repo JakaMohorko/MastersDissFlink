@@ -1,21 +1,15 @@
 
 package org.apache.flink.streaming.api.operators.util;
 
-import org.apache.flink.api.common.functions.Function;
-import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.operators.TimestampedCollector;
 import org.apache.flink.streaming.api.operators.util.interpolators.Interpolator;
-import org.apache.flink.streaming.api.watermark.Watermark;
-
-import java.io.Serializable;
-import java.util.ArrayList;
 
 /**
  * Resamples by moving values to their nearest sampling interval and interpolating values where
  * values are missing.
  * @param <I> Input type
  */
-public class AllResampler<I> extends Resampler<I> implements Function, Serializable  {
+public class AllResampler<I> extends Resampler<I> {
 
 	Interpolator<I> interpolator;
 
@@ -25,8 +19,9 @@ public class AllResampler<I> extends Resampler<I> implements Function, Serializa
 		this.interpolator = interpolator;
 	}
 
-	public AllResampler(long samplingInterval, Class<?> typeClass, long samplingWindow){
+	public AllResampler(long samplingInterval, Interpolator<I> interpolator, Class<?> typeClass, long samplingWindow) {
 		super(samplingInterval, typeClass, samplingWindow);
+		this.interpolator = interpolator;
 	}
 
 	public void resample(I value, long timestamp, TimestampedCollector<I> out) throws Exception {

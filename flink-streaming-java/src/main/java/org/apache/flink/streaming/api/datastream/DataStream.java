@@ -82,6 +82,7 @@ import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTime
 import org.apache.flink.streaming.api.windowing.assigners.WindowAssigner;
 import org.apache.flink.streaming.api.windowing.evictors.CountEvictor;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.triggers.CountMatrixTrigger;
 import org.apache.flink.streaming.api.windowing.triggers.CountTrigger;
 import org.apache.flink.streaming.api.windowing.triggers.PurgingTrigger;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
@@ -836,6 +837,18 @@ public class DataStream<T> {
 		return windowAll(GlobalWindows.create()).trigger(PurgingTrigger.of(CountTrigger.of(size)));
 	}
 
+	public AllWindowedStream<T, GlobalWindow> countWindowAllMatrix(long size, long numKeys, KeySelector<T, Integer> matrixKey) {
+		return windowAll(GlobalWindows.create()).trigger(CountMatrixTrigger.of(size, numKeys, matrixKey));
+	}
+	public AllWindowedStream<T, GlobalWindow> countWindowAllSlide(long size, long slide) {
+		return windowAllSlide(GlobalWindows.create(), size, slide).trigger(CountTrigger.of(slide));
+	}
+
+	@PublicEvolving
+	public <W extends Window> AllWindowedStream<T, W> windowAllSlide(WindowAssigner<? super T, W> assigner, long windowSize, long slideSize) {
+		return new AllWindowedStream<>(this, assigner, windowSize, slideSize);
+	}
+
 	/**
 	 * Windows this {@code DataStream} into sliding count windows.
 	 *
@@ -1303,10 +1316,15 @@ public class DataStream<T> {
 		return sink;
 	}
 
-
 	@SuppressWarnings({ "unchecked" })
 	public <R> SingleOutputStreamOperator<R> resample(long samplingInterval, Interpolator<R> interpolator) {
 		ResamplingOperator<R> resamplingOperator = new ResamplingOperator<R>(samplingInterval, interpolator, getType().getTypeClass());
+		return doTransform("Resample", (TypeInformation<R>) getType(), SimpleOperatorFactory.of(resamplingOperator));
+	}
+
+	@SuppressWarnings({ "unchecked" })
+	public <R> SingleOutputStreamOperator<R> resample(long samplingInterval, Interpolator<R> interpolator, long samplingWindow) {
+		ResamplingOperator<R> resamplingOperator = new ResamplingOperator<R>(samplingInterval, interpolator, getType().getTypeClass(), samplingWindow);
 		return doTransform("Resample", (TypeInformation<R>) getType(), SimpleOperatorFactory.of(resamplingOperator));
 	}
 

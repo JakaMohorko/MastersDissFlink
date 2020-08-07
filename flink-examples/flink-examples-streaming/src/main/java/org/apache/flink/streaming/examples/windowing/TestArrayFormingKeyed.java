@@ -64,7 +64,7 @@ public class TestArrayFormingKeyed {
 		// set up the execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-		env.setParallelism(1);
+		env.setParallelism(3);
 
 		final List<Tuple3<String, Long, Long>> input = new ArrayList<>();
 
@@ -77,9 +77,9 @@ public class TestArrayFormingKeyed {
 		//input.add(new Tuple3<>("0",21L, 29L));
 		//input.add(new Tuple3<>("1",14L, 34L));
 		input.add(new Tuple3<>("0", 17L, 39L));
-		input.add(new Tuple3<>("1", 15L, 44L));
-		input.add(new Tuple3<>("0", 10L, 51L));
-		input.add(new Tuple3<>("1", 11L, 56L));
+		input.add(new Tuple3<>("1", 15L, 43L));
+		input.add(new Tuple3<>("0", 10L, 52L));
+		input.add(new Tuple3<>("1", 11L, 57L));
 		input.add(new Tuple3<>("0", 13L, 59L));
 		input.add(new Tuple3<>("1", 20L, 64L));
 		input.add(new Tuple3<>("0", 27L, 70L));
@@ -116,7 +116,7 @@ public class TestArrayFormingKeyed {
 						return wc.f0;
 					}
 				})
-				.keyedResample(5L, interpolator, 1)
+				.keyedResample(5L, interpolator, 1, 1L)
 				.keyBy(new KeySelector<Tuple2<String, Long>, String>() {
 					public String getKey(Tuple2<String, Long> wc) {
 						return wc.f0;
@@ -145,12 +145,10 @@ public class TestArrayFormingKeyed {
 	/**
 	 * Test class for array operations.
 	 */
-	public static class MyApplyToArray extends ApplyToArrayFunction<String, GlobalWindow, Tuple2<String, Long>>{
+	public static class MyApplyToArray extends ApplyToArrayFunction<String, GlobalWindow, Tuple2<String, Long>, Tuple2<String, Long>>{
 		@Override
 		public ArrayList<Tuple2<String, Long>> userFunction(ArrayList<Tuple2<String, Long>> arr){
-			for (Tuple2<String, Long> t : arr){
-				t.f1 = t.f1 + 5L;
-			}
+			System.out.println(arr);
 			return arr;
 		}
 	}

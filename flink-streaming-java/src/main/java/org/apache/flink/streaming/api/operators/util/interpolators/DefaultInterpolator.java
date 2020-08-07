@@ -20,17 +20,21 @@ public class DefaultInterpolator <I> extends Interpolator <I> {
 	}
 
 	@Override
-	public Object interpolate(long collectionTimestamp, Class<?> typeClass) { return null; }
+	public Object interpolate(long collectionTimestamp, Class<?> typeClass) {
+		return null;
+	}
 
 	@Override
 	public void updateBuffer(I value, long timestamp){ }
 
 	@Override
-	public void interpolateAndCollect(ArrayList<Tuple2<Long, I>> collectionBuffer, TimestampedCollector<I> collector,
-									  long latestTimestamp, Class<?> typeClass) throws Exception{
+	public ArrayList<Tuple2<Long, I>> interpolateAndCollect(ArrayList<Tuple2<Long, I>> collectionBuffer, TimestampedCollector<I> collector,
+											long latestTimestamp, Class<?> typeClass) throws Exception{
 		collector.emitWatermark(new Watermark(collectionBuffer.get(0).f0 - 1));
 		collector.setAbsoluteTimestamp(collectionBuffer.get(0).f0);
-		collector.collect(collectionBuffer.get(0).f1);
+		collector.collect(defaultValue);
+
+		return collectionBuffer;
 	}
 
 }

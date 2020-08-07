@@ -18,6 +18,7 @@
 
 package org.apache.flink.streaming.runtime.operators.windowing;
 
+import org.apache.commons.compress.archivers.ar.ArArchiveEntry;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.AppendingState;
@@ -25,8 +26,13 @@ import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.StateDescriptor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.functions.KeySelector;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.internal.InternalListState;
+import org.apache.flink.shaded.guava18.com.google.common.base.Function;
+import org.apache.flink.shaded.guava18.com.google.common.collect.FluentIterable;
+import org.apache.flink.shaded.guava18.com.google.common.collect.Iterables;
+import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
 import org.apache.flink.streaming.api.operators.InternalTimer;
 import org.apache.flink.streaming.api.windowing.assigners.MergingWindowAssigner;
 import org.apache.flink.streaming.api.windowing.assigners.WindowAssigner;
@@ -34,16 +40,15 @@ import org.apache.flink.streaming.api.windowing.evictors.Evictor;
 import org.apache.flink.streaming.api.windowing.triggers.Trigger;
 import org.apache.flink.streaming.api.windowing.triggers.TriggerResult;
 import org.apache.flink.streaming.api.windowing.windows.Window;
+import org.apache.flink.streaming.runtime.operators.windowing.functions.InternalSlidingWindowFunction;
 import org.apache.flink.streaming.runtime.operators.windowing.functions.InternalWindowFunction;
+import org.apache.flink.streaming.runtime.operators.windowing.util.SlidingAggregator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.util.OutputTag;
 
-import org.apache.flink.shaded.guava18.com.google.common.base.Function;
-import org.apache.flink.shaded.guava18.com.google.common.collect.FluentIterable;
-import org.apache.flink.shaded.guava18.com.google.common.collect.Iterables;
-
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedList;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -52,7 +57,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  *
  * <p>The {@code Evictor} is used to remove elements from a pane before/after the evaluation of
  * {@link InternalWindowFunction} and after the window evaluation gets triggered by a
- * {@link org.apache.flink.streaming.api.windowing.triggers.Trigger}.
+ * {@link Trigger}.
  *
  * @param <K> The type of key returned by the {@code KeySelector}.
  * @param <IN> The type of the incoming elements.
@@ -60,16 +65,28 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * @param <W> The type of {@code Window} that the {@code WindowAssigner} assigns.
  */
 @Internal
-public class ArrayWindowOperator<K, IN, OUT, W extends Window>
-	extends WindowOperator<K, IN, Iterable<IN>, OUT, W> {
+public class SlidingArrayWindowOperator<K, IN, OUT, W extends Window>
+	extends SlidingWindowOperator<K, IN, IN, OUT, W> {
 
 	private static final long serialVersionUID = 1L;
 
-	private long slideRemainingElements = -1L;
+
+	private long slideSize;
+
+	private long slideRemainingElements;
+
+	private SlidingAggregator<OUT> slidingAggregator;
+
+	private ArrayList<OUT> previousOutput;
+
+	private ArrayList<OUT> collectionBuffer;
+
+	private ArrayList<OUT> output;
+
+	private ArrayList<OUT> forward;
 	// ------------------------------------------------------------------------
 	// these fields are set by the API stream graph builder to configure the operator
 
-	private final Evictor<? super IN, ? super W> evictor;
 
 	private final StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> evictingWindowStateDescriptor;
 
@@ -83,24 +100,30 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 	// ------------------------------------------------------------------------
 
 
-	public ArrayWindowOperator(WindowAssigner<? super IN, W> windowAssigner,
-	                           TypeSerializer<W> windowSerializer,
-	                           KeySelector<IN, K> keySelector,
-	                           TypeSerializer<K> keySerializer,
-	                           StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
-	                           InternalWindowFunction<Iterable<IN>, OUT, K, W> windowFunction,
-	                           Trigger<? super IN, ? super W> trigger,
-	                           Evictor<? super IN, ? super W> evictor,
-	                           long allowedLateness,
-	                           OutputTag<IN> lateDataOutputTag,
-	                           long slideRemainingElements) {
+	public SlidingArrayWindowOperator(WindowAssigner<? super IN, W> windowAssigner,
+	                                  TypeSerializer<W> windowSerializer,
+	                                  KeySelector<IN, K> keySelector,
+	                                  TypeSerializer<K> keySerializer,
+	                                  StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
+	                                  InternalSlidingWindowFunction<IN, OUT, K, W> windowFunction,
+	                                  Trigger<? super IN, ? super W> trigger,
+	                                  long allowedLateness,
+	                                  OutputTag<IN> lateDataOutputTag,
+	                                  long windowSize,
+	                                  long slideSize,
+	                                  SlidingAggregator<OUT> slidingAggregator) {
 
 		super(windowAssigner, windowSerializer, keySelector,
 			keySerializer, null, windowFunction, trigger, allowedLateness, lateDataOutputTag);
 
-		this.evictor = evictor;
 		this.evictingWindowStateDescriptor = checkNotNull(windowStateDescriptor);
-		this.slideRemainingElements = slideRemainingElements;
+		this.slideSize = slideSize;
+		this.slidingAggregator = slidingAggregator;
+		slideRemainingElements = windowSize - slideSize;
+		previousOutput = new ArrayList<>();
+		collectionBuffer = new ArrayList<>();
+		output = new ArrayList<>();
+		forward = new ArrayList<>();
 	}
 
 	@Override
@@ -341,59 +364,64 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 
 	private void emitWindowContents(W window, Iterable<StreamRecord<IN>> contents, ListState<StreamRecord<IN>> windowState) throws Exception {
 		timestampedCollector.setAbsoluteTimestamp(window.maxTimestamp());
-		if (evictor != null){
 
-			// Work around type system restrictions...
-			FluentIterable<TimestampedValue<IN>> recordsWithTimestamp = FluentIterable
-				.from(contents)
-				.transform(new Function<StreamRecord<IN>, TimestampedValue<IN>>() {
-					@Override
-					public TimestampedValue<IN> apply(StreamRecord<IN> input) {
-						return TimestampedValue.from(input);
+		ArrayList<IN> arrayForm = createArray(contents);
+		processContext.window = triggerContext.window;
+
+		Tuple2<ArrayList<OUT>, ArrayList<OUT>> out = userFunction.process(triggerContext.key, triggerContext.window, processContext, forward, arrayForm);
+		output = out.f0;
+		forward = out.f1;
+
+		if (slidingAggregator != null){
+
+			if (collectionBuffer.size() != (int) slideRemainingElements){
+				for (int x = 0; x < output.size(); x++){
+					if (x < collectionBuffer.size()){
+						collectionBuffer.set(x, slidingAggregator.aggregate(collectionBuffer.get(x), output.get(x)));
 					}
-				});
-
-			evictorContext.evictBefore(recordsWithTimestamp, Iterables.size(recordsWithTimestamp));
-
-			FluentIterable<IN> projectedContents = recordsWithTimestamp
-				.transform(new Function<TimestampedValue<IN>, IN>() {
-					@Override
-					public IN apply(TimestampedValue<IN> input) {
-						return input.getValue();
+					else if (collectionBuffer.size() != (int) slideRemainingElements){
+						collectionBuffer.add(output.get(x));
 					}
-				});
-
-			processContext.window = triggerContext.window;
-			userFunction.process(triggerContext.key, triggerContext.window, processContext, projectedContents, timestampedCollector);
-			evictorContext.evictAfter(recordsWithTimestamp, Iterables.size(recordsWithTimestamp));
-			//work around to fix FLINK-4369, remove the evicted elements from the windowState.
-			//this is inefficient, but there is no other way to remove elements from ListState, which is an AppendingState.
-			windowState.clear();
-			for (TimestampedValue<IN> record : recordsWithTimestamp) {
-				windowState.add(record.getStreamRecord());
-			}
-		}
-		else {
-			Iterable<IN> arrayForm = createArray(contents);
-			processContext.window = triggerContext.window;
-			userFunction.process(triggerContext.key, triggerContext.window, processContext, arrayForm, timestampedCollector);
-
-			if (slideRemainingElements != -1){
-				ArrayList<StreamRecord<IN>> arr = (ArrayList<StreamRecord<IN>>) contents;
-
-				if (arr.size() > slideRemainingElements){
-					windowState.clear();
-					for (int x = arr.size() - (int) slideRemainingElements; x < arr.size(); x++){
-						windowState.add(arr.get(x));
+					else{
+						collectionBuffer.add(output.get(x));
+						timestampedCollector.collect(collectionBuffer.get(0));
+						collectionBuffer.remove(0);
 					}
 				}
 			}
-
+			else{
+				for (int x = 0; x < output.size(); x++){
+					if (x < slideSize){
+						timestampedCollector.collect(slidingAggregator.aggregate(collectionBuffer.get(x), output.get(x)));
+					}
+					else if (x >= collectionBuffer.size()){
+						collectionBuffer.set(x - (int) slideSize, output.get(x));
+					}
+					else {
+						collectionBuffer.set(x - (int) slideSize, slidingAggregator.aggregate(collectionBuffer.get(x), output.get(x)));
+					}
+				}
+			}
 		}
+		else {
+			for (OUT emit : output){
+				timestampedCollector.collect(emit);
+			}
+		}
+
+		ArrayList<StreamRecord<IN>> arr = (ArrayList<StreamRecord<IN>>) contents;
+
+		if (arr.size() > slideRemainingElements){
+			windowState.clear();
+			for (int x = arr.size() - (int) slideRemainingElements; x < arr.size(); x++){
+				windowState.add(arr.get(x));
+			}
+		}
+
 	}
 
 
-	private Iterable<IN> createArray(Iterable<StreamRecord<IN>> contents){
+	private ArrayList<IN> createArray(Iterable<StreamRecord<IN>> contents){
 		ArrayList<IN> arr = new ArrayList<>();
 		for (StreamRecord<IN> it : contents){
 			arr.add(it.getValue());
@@ -444,20 +472,13 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 
 		@Override
 		public MetricGroup getMetricGroup() {
-			return ArrayWindowOperator.this.getMetricGroup();
+			return SlidingArrayWindowOperator.this.getMetricGroup();
 		}
 
 		public K getKey() {
 			return key;
 		}
 
-		void evictBefore(Iterable<TimestampedValue<IN>> elements, int size) {
-			evictor.evictBefore((Iterable) elements, size, window, this);
-		}
-
-		void evictAfter(Iterable<TimestampedValue<IN>>  elements, int size) {
-			evictor.evictAfter((Iterable) elements, size, window, this);
-		}
 	}
 
 	@Override
@@ -485,15 +506,11 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 	// Getters for testing
 	// ------------------------------------------------------------------------
 
-	@VisibleForTesting
-	public Evictor<? super IN, ? super W> getEvictor() {
-		return evictor;
-	}
 
 	@Override
 	@VisibleForTesting
 	@SuppressWarnings("unchecked, rawtypes")
-	public StateDescriptor<? extends AppendingState<IN, Iterable<IN>>, ?> getStateDescriptor() {
-		return (StateDescriptor<? extends AppendingState<IN, Iterable<IN>>, ?>) evictingWindowStateDescriptor;
+	public StateDescriptor<? extends AppendingState<IN, IN>, ?> getStateDescriptor() {
+		return (StateDescriptor<? extends AppendingState<IN, IN>, ?>) evictingWindowStateDescriptor;
 	}
 }

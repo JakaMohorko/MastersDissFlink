@@ -1,35 +1,29 @@
 
 package org.apache.flink.streaming.api.operators.util;
 
-import org.apache.flink.api.common.functions.Function;
-import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.operators.TimestampedCollector;
 import org.apache.flink.streaming.api.operators.util.interpolators.KeyedInterpolator;
-import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.util.typeutils.FieldAccessor;
-
-import java.io.Serializable;
-import java.util.ArrayList;
 
 /**
  * Resamples by moving values to their nearest sampling interval and interpolating values where
  * values are missing. Used for keyed streams.
  * @param <I> Input type
  */
-public class KeyedResampler<I> extends Resampler<I> implements Function, Serializable {
+public class KeyedResampler<I> extends Resampler<I> {
 
 	KeyedInterpolator<I> interpolator;
 	FieldAccessor<I, Object> fieldAccessor;
 
 	public KeyedResampler(long samplingInterval, KeyedInterpolator<I> interpolator,
-						  Class<?> typeClass, FieldAccessor<I, Object> fieldAccessor){
+							Class<?> typeClass, FieldAccessor<I, Object> fieldAccessor) {
 		super(samplingInterval, typeClass);
 		this.interpolator = interpolator;
 		this.fieldAccessor = fieldAccessor;
 	}
 
 	public KeyedResampler(long samplingInterval, KeyedInterpolator<I> interpolator,
-						  Class<?> typeClass, FieldAccessor<I, Object> fieldAccessor, long samplingWindow){
+							Class<?> typeClass, FieldAccessor<I, Object> fieldAccessor, long samplingWindow) {
 		super(samplingInterval, typeClass, samplingWindow);
 		this.interpolator = interpolator;
 		this.fieldAccessor = fieldAccessor;

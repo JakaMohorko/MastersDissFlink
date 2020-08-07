@@ -111,7 +111,7 @@ public class TestArrayForming {
 
 		DataStream<Long> counts =
 			source
-				.resample(5L, interpolator)
+				.resample(5L, interpolator, 1L)
 				.countWindowAll(5)
 				.toArrayStream()
 				.applyToArray(new MyApplyToArray());
@@ -135,7 +135,7 @@ public class TestArrayForming {
 	/**
 	 * Test class for array operations.
 	 */
-	public static class MyApplyToArray extends ApplyToArrayFunction<Byte, GlobalWindow, Long>{
+	public static class MyApplyToArray extends ApplyToArrayFunction<Byte, GlobalWindow, Long, Long>{
 		@Override
 		public ArrayList<Long> userFunction(ArrayList<Long> arr){
 			ArrayList<Long> out = new ArrayList<>();
