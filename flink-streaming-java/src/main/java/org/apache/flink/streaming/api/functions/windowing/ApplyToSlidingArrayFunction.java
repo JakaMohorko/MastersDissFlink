@@ -20,14 +20,12 @@ package org.apache.flink.streaming.api.functions.windowing;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
 import org.apache.flink.streaming.api.windowing.windows.Window;
-import org.apache.flink.util.Collector;
 
 import java.util.ArrayList;
 
 /**
- * A {@link WindowFunction} that just emits each input element.
+ * A {@link WindowFunction} that applies a function to sliding array windows, allowing for incremental computation.
  */
 @Internal
 public class ApplyToSlidingArrayFunction<K, W extends Window, T, O> implements SlidingWindowFunction<T, O, K, W> {
@@ -38,7 +36,6 @@ public class ApplyToSlidingArrayFunction<K, W extends Window, T, O> implements S
 	public Tuple2<ArrayList<O>, ArrayList<O>> apply(K k, W window, ArrayList<O> outputPrevious, ArrayList<T> input) throws Exception {
 		return userFunction(outputPrevious, input);
 	}
-
 
 	public Tuple2<ArrayList<O>, ArrayList<O>> userFunction(ArrayList<O> outputPrevious, ArrayList<T> input){
 		return new Tuple2<>();

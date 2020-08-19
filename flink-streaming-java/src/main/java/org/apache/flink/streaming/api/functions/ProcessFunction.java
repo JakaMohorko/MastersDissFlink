@@ -25,8 +25,6 @@ import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
 
-import java.util.ArrayList;
-
 /**
  * A function that processes elements of a stream.
  *

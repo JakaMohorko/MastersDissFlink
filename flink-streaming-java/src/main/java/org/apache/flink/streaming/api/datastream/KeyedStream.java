@@ -1160,7 +1160,7 @@ public class KeyedStream<T, KEY> extends DataStream<T> {
 	}
 
 	public SingleOutputStreamOperator<T> resample(long samplingInterval, KeyedInterpolator<T> interpolator,
-	                                         int dataField, long samplingWindow) {
+								int dataField, long samplingWindow) {
 
 		FieldAccessor<T, Object> fieldAccessor = FieldAccessorFactory.getAccessor(getType(),
 			dataField, getExecutionConfig());

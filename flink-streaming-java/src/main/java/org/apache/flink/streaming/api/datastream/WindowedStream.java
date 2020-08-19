@@ -135,7 +135,7 @@ public class WindowedStream<T, K, W extends Window> {
 
 	@PublicEvolving
 	public WindowedStream(KeyedStream<T, K> input,
-	                      WindowAssigner<? super T, W> windowAssigner, long windowSize, long slideSize) {
+						WindowAssigner<? super T, W> windowAssigner, long windowSize, long slideSize) {
 		this.input = input;
 		this.windowAssigner = windowAssigner;
 		this.trigger = windowAssigner.getDefaultTrigger(input.getExecutionEnvironment());

@@ -21,7 +21,6 @@ package org.apache.flink.streaming.api.functions.windowing;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.util.Collector;
-import scala.Int;
 
 import java.util.ArrayList;
 

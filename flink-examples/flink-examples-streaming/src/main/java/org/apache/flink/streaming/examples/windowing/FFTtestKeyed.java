@@ -17,29 +17,23 @@
 
 package org.apache.flink.streaming.examples.windowing;
 
-import org.apache.commons.math3.complex.Complex;
-import org.apache.commons.math3.transform.DftNormalization;
-import org.apache.commons.math3.transform.FastFourierTransformer;
-import org.apache.commons.math3.transform.TransformType;
-import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.streaming.api.functions.windowing.ApplyToArrayFunction;
+import org.apache.flink.streaming.api.functions.windowing.util.FFTKeyed;
 import org.apache.flink.streaming.api.operators.util.interpolators.KeyedLinearInterpolator;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
 import org.apache.flink.streaming.examples.wordcount.util.WordCountData;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.*;
+import org.apache.commons.math3.complex.Complex;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 /**
  * Implements a windowed version of the streaming "WordCount" program.
  *
@@ -56,6 +50,7 @@ import java.util.*;
  * <li>use basic windowing abstractions.
  * </ul>
  */
+
 public class FFTtestKeyed {
 
 	// *************************************************************************
@@ -67,138 +62,70 @@ public class FFTtestKeyed {
 		// set up the execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-		env.setParallelism(3);
+		env.setParallelism(1);
 
 		final List<Tuple3<Double, Long, Long>> input = new ArrayList<>();
 
-		//long[] numElementsArr = {10000L, 100000L, 1000000L, 2500000L, 5000000L, 10000000L, 15000000L};
-		//int[] windowSizeArr = {128, 256, 512, 1024, 2048, 4096};
-		//long [] slideSizes = {256L, 230L, 179L, 128L, 76L, 25L};
-		int[] windowSizeArr = {256};
-		long [] slideSizes = {256};
-		long[] numElementsArr = {10000000L};
+		long numElements = 1000000;
+		long windowSize = 256L;
 
-		for (long numElements : numElementsArr) {
-			for (int windowSize : windowSizeArr) {
-				for (long slideSize : slideSizes){
-					for (int y = 0; y < 1; y++) {
-						long numKeys = 100;
-						long key = 1L;
-						long watermark = 0L;
-						input.clear();
-						Random rnd = new Random();
-						for (long x = 1L; x <= numElements; x += 1L) {
-							if (x % numKeys == 0) {
-								key = 1L;
-								watermark += 1;
-							} else {
-								key++;
-							}
-							input.add(new Tuple3<>(rnd.nextDouble(), key, watermark));
-						}
+		long numKeys = 100;
+		long key = 1L;
+		long watermark = 0L;
 
-						DataStream<Tuple2<Double, Long>> source = env
-							.addSource(new SourceFunction<Tuple2<Double, Long>>() {
-								private static final long serialVersionUID = 1L;
-
-								@Override
-								public void run(SourceContext<Tuple2<Double, Long>> ctx) {
-									final long startTime = System.currentTimeMillis();
-									for (Tuple3<Double, Long, Long> value : input) {
-										ctx.collectWithTimestamp(new Tuple2<>(value.f0, value.f1), value.f2);
-										ctx.emitWatermark(new Watermark(value.f2));
-									}
-									ctx.emitWatermark(new Watermark(Long.MAX_VALUE));
-									final long endTime = System.currentTimeMillis();
-									System.out.println(endTime - startTime);
-									try {
-										File file = new File("/home/jaka/Documents/masters/dataout");
-										FileWriter myWriter = new FileWriter(file, true);
-										//myWriter.write("Duration: " + (endTime - startTime) + " Elements: " + numElements + " Window: " + windowSize + " keys: 100\n");
-										//myWriter.write("Duration: " + (endTime - startTime) + " Elements: " + numElements + " Window: " + windowSize + " Slide: " + slideSize + "\n");
-										myWriter.close();
-									} catch (IOException e) {
-										System.out.println("An error occurred.");
-										e.printStackTrace();
-									}
-								}
-
-								@Override
-								public void cancel() {
-								}
-							});
-
-						KeyedLinearInterpolator<Tuple2<Double, Long>> interpolator = new KeyedLinearInterpolator<>();
-						KeyedStream<Tuple2<Double, Long>, Long> out =
-						source
-							.keyBy(t -> t.f1)
-							.keyedResample(1L, interpolator, 0);
-							//.countWindow(windowSize)
-							//.toArrayStream()
-							//.countWindowSlide(windowSize, slideSize)
-							//.sum(0);
-							//.toArrayStreamSliding()
-							//.applyToArray(new DoFFT());
-
-						//out.print();
-						//System.out.println(env.getExecutionPlan());
-						env.execute("FFTtest");
-					}
-				}
+		Random rnd = new Random();
+		for (long x = 1L; x <= numElements; x += 1L) {
+			if (x % numKeys == 0) {
+				key = 1L;
+				watermark += 1;
+			} else {
+				key++;
 			}
+			input.add(new Tuple3<>(rnd.nextDouble(), key, watermark));
 		}
-	}
 
-	/**
-	 * Sums up all data with same key.
-	 */
+		DataStream<Tuple2<Double, Long>> source = env
+			.addSource(new SourceFunction<Tuple2<Double, Long>>() {
+				private static final long serialVersionUID = 1L;
 
-	public static class MyReduce implements ReduceFunction<Tuple2<String, Long>>{
-		@Override
-		public Tuple2<String, Long> reduce(Tuple2<String, Long> v1, Tuple2<String, Long> v2){
-			return new Tuple2<>(v1.f0, v1.f1 + v2.f1);
-		}
-	}
+				@Override
+				public void run(SourceContext<Tuple2<Double, Long>> ctx) {
+					final long startTime = System.currentTimeMillis();
+					for (Tuple3<Double, Long, Long> value : input) {
+						ctx.collectWithTimestamp(new Tuple2<>(value.f0, value.f1), value.f2);
+						ctx.emitWatermark(new Watermark(value.f2));
+					}
+					ctx.emitWatermark(new Watermark(Long.MAX_VALUE));
+					final long endTime = System.currentTimeMillis();
+					System.out.println(endTime - startTime);
+				}
 
-	/**
-	 * Test class for array operations.
-	 */
+				@Override
+				public void cancel() {
+				}
+			});
 
-	public static class MyApplyToArray extends ApplyToArrayFunction<Long, GlobalWindow, Tuple2<Double, Long>, Tuple2<Double, Long>>{
-		@Override
-		public ArrayList<Tuple2<Double, Long>> userFunction(ArrayList<Tuple2<Double, Long>> arr){
-			return arr;
-		}
+		KeyedLinearInterpolator<Tuple2<Double, Long>> interpolator = new KeyedLinearInterpolator<>();
+		source
+			.keyBy(t -> t.f1)
+			.keyedResample(1L, interpolator, 0)
+			.countWindow(windowSize)
+			.toArrayStream()
+			.applyToArray(new DoFFT());
+
+		env.execute("FFTtest");
 	}
 
 	/**
 	 * FFT test.
 	 */
-	public static class DoFFT extends ApplyToArrayFunction<Long, GlobalWindow, Tuple2<Double, Long>, Double>{
+	public static class DoFFT extends FFTKeyed<Long, GlobalWindow> {
 		@Override
-		public ArrayList<Double> userFunction(ArrayList<Tuple2<Double, Long>> arr){
-			if (((Math.log(arr.size()) / Math.log(2))) % 1 != 0){
-				return new ArrayList<>();
+		public Complex[] fftFunction(Complex[] data){
+			for (int x = 0; x < data.length; x++){
+				data[x] = data[x].divide(0.5);
 			}
-			else {
-				double[] array = arr.stream().map(t -> t.f0).mapToDouble(Double::doubleValue).toArray();
-				FastFourierTransformer fastFourierTransformer = new FastFourierTransformer(DftNormalization.STANDARD);
-
-				Complex[] temp = fastFourierTransformer.transform(array, TransformType.FORWARD);
-
-				for (Complex t : temp) {
-					t.divide(0.5);
-				}
-
-				temp = fastFourierTransformer.transform(array, TransformType.INVERSE);
-				ArrayList<Double> out = new ArrayList<>();
-
-				out.add(0.0);
-				for (Complex t : temp) {
-					out.set(0, out.get(0) + t.getReal());
-				}
-				return out;
-			}
+			return data;
 		}
 	}
 }

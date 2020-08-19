@@ -22,7 +22,6 @@ import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.windowing.windows.Window;
-import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
 
 import java.util.ArrayList;

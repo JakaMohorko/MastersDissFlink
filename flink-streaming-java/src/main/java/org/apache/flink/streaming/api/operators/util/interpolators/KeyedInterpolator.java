@@ -22,7 +22,7 @@ public abstract class KeyedInterpolator<I> implements Serializable {
 	}
 
 	public ArrayList<Tuple2<Long, I>> interpolateAndCollect(ArrayList<Tuple2<Long, I>> collectionBuffer, TimestampedCollector<I> collector,
-									  long latestTimestamp, Class<?> typeClass, FieldAccessor<I, Object> fieldAccessor) throws Exception {
+									long latestTimestamp, Class<?> typeClass, FieldAccessor<I, Object> fieldAccessor) throws Exception {
 
 		if (interpolationBuffer.size() == interpolationBufferWindowSize) {
 			{
@@ -54,8 +54,9 @@ public abstract class KeyedInterpolator<I> implements Serializable {
 		}
 		return collectionBuffer;
 	}
+
 	public Object interpolate(long collectionTimestamp, Class<?> typeClass,
-							  FieldAccessor<I, Object> fieldAccessor) throws Exception{
+								FieldAccessor<I, Object> fieldAccessor) throws Exception{
 		return null;
 	}
 

@@ -22,7 +22,6 @@ import org.apache.flink.annotation.Public;
 import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.windowing.windows.Window;
-import org.apache.flink.util.Collector;
 
 import java.io.Serializable;
 import java.util.ArrayList;

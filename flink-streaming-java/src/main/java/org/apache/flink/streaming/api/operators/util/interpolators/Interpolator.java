@@ -22,7 +22,7 @@ public abstract class Interpolator<I> implements Serializable {
 	}
 
 	public ArrayList<Tuple2<Long, I>> interpolateAndCollect(ArrayList<Tuple2<Long, I>> collectionBuffer, TimestampedCollector<I> collector,
-									  long latestTimestamp, Class<?> typeClass) throws Exception{
+																long latestTimestamp, Class<?> typeClass) throws Exception{
 
 		if (interpolationBuffer.size() == interpolationBufferWindowSize){
 			while (!collectionBuffer.isEmpty()){

@@ -8,6 +8,9 @@ import org.apache.flink.streaming.api.watermark.Watermark;
 import java.io.Serializable;
 import java.util.ArrayList;
 
+/**
+ * Resampling class that handles data alignment and interpolation calls for non-keyed streams.
+ */
 public abstract class Resampler <I> implements Function, Serializable {
 	long currentIntervalTimestamp = Long.MAX_VALUE;
 	long samplingInterval;

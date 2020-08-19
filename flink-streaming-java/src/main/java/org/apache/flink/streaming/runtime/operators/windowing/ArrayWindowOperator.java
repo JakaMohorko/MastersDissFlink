@@ -82,18 +82,17 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 
 	// ------------------------------------------------------------------------
 
-
 	public ArrayWindowOperator(WindowAssigner<? super IN, W> windowAssigner,
-	                           TypeSerializer<W> windowSerializer,
-	                           KeySelector<IN, K> keySelector,
-	                           TypeSerializer<K> keySerializer,
-	                           StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
-	                           InternalWindowFunction<Iterable<IN>, OUT, K, W> windowFunction,
-	                           Trigger<? super IN, ? super W> trigger,
-	                           Evictor<? super IN, ? super W> evictor,
-	                           long allowedLateness,
-	                           OutputTag<IN> lateDataOutputTag,
-	                           long slideRemainingElements) {
+							TypeSerializer<W> windowSerializer,
+							KeySelector<IN, K> keySelector,
+							TypeSerializer<K> keySerializer,
+							StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
+							InternalWindowFunction<Iterable<IN>, OUT, K, W> windowFunction,
+							Trigger<? super IN, ? super W> trigger,
+							Evictor<? super IN, ? super W> evictor,
+							long allowedLateness,
+							OutputTag<IN> lateDataOutputTag,
+							long slideRemainingElements) {
 
 		super(windowAssigner, windowSerializer, keySelector,
 			keySerializer, null, windowFunction, trigger, allowedLateness, lateDataOutputTag);
@@ -392,7 +391,6 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 		}
 	}
 
-
 	private Iterable<IN> createArray(Iterable<StreamRecord<IN>> contents){
 		ArrayList<IN> arr = new ArrayList<>();
 		for (StreamRecord<IN> it : contents){
@@ -400,7 +398,6 @@ public class ArrayWindowOperator<K, IN, OUT, W extends Window>
 		}
 		return arr;
 	}
-
 
 	private void clearAllState(
 		W window,

@@ -1,23 +1,20 @@
 package org.apache.flink.streaming.api.operators.util.interpolators;
 
-import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.util.typeutils.FieldAccessor;
-
-import java.util.ArrayList;
 
 /**
  * Uses two nearest values for interpolation by using a linear function. Used for interpolations on keyed streams.
  * @param <I> Input type
  */
 public class KeyedLinearInterpolator <I> extends KeyedInterpolator <I> {
-	
+
 	public KeyedLinearInterpolator(){
 		super(2);
 	}
 
 	@Override
-	public Object interpolate(long collectionTimestamp, Class<?> typeClass, 
-							  FieldAccessor<I, Object> fieldAccessor) throws Exception{
+	public Object interpolate(long collectionTimestamp, Class<?> typeClass,
+								FieldAccessor<I, Object> fieldAccessor) throws Exception{
 
 		if (interpolationBuffer.size() != 2){
 			throw new Exception("Buffer size of linear interpolators should be 2.");

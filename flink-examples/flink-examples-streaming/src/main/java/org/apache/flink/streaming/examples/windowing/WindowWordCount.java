@@ -89,6 +89,7 @@ public class WindowWordCount {
 		}
 
 		// execute program
+
 		env.execute("WindowWordCount");
 	}
 }

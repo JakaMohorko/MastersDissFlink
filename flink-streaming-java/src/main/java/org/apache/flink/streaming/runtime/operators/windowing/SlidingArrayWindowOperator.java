@@ -18,7 +18,6 @@
 
 package org.apache.flink.streaming.runtime.operators.windowing;
 
-import org.apache.commons.compress.archivers.ar.ArArchiveEntry;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.AppendingState;
@@ -29,10 +28,6 @@ import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.internal.InternalListState;
-import org.apache.flink.shaded.guava18.com.google.common.base.Function;
-import org.apache.flink.shaded.guava18.com.google.common.collect.FluentIterable;
-import org.apache.flink.shaded.guava18.com.google.common.collect.Iterables;
-import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
 import org.apache.flink.streaming.api.operators.InternalTimer;
 import org.apache.flink.streaming.api.windowing.assigners.MergingWindowAssigner;
 import org.apache.flink.streaming.api.windowing.assigners.WindowAssigner;
@@ -48,7 +43,6 @@ import org.apache.flink.util.OutputTag;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedList;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -99,19 +93,18 @@ public class SlidingArrayWindowOperator<K, IN, OUT, W extends Window>
 
 	// ------------------------------------------------------------------------
 
-
 	public SlidingArrayWindowOperator(WindowAssigner<? super IN, W> windowAssigner,
-	                                  TypeSerializer<W> windowSerializer,
-	                                  KeySelector<IN, K> keySelector,
-	                                  TypeSerializer<K> keySerializer,
-	                                  StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
-	                                  InternalSlidingWindowFunction<IN, OUT, K, W> windowFunction,
-	                                  Trigger<? super IN, ? super W> trigger,
-	                                  long allowedLateness,
-	                                  OutputTag<IN> lateDataOutputTag,
-	                                  long windowSize,
-	                                  long slideSize,
-	                                  SlidingAggregator<OUT> slidingAggregator) {
+										TypeSerializer<W> windowSerializer,
+										KeySelector<IN, K> keySelector,
+										TypeSerializer<K> keySerializer,
+										StateDescriptor<? extends ListState<StreamRecord<IN>>, ?> windowStateDescriptor,
+										InternalSlidingWindowFunction<IN, OUT, K, W> windowFunction,
+										Trigger<? super IN, ? super W> trigger,
+										long allowedLateness,
+										OutputTag<IN> lateDataOutputTag,
+										long windowSize,
+										long slideSize,
+										SlidingAggregator<OUT> slidingAggregator) {
 
 		super(windowAssigner, windowSerializer, keySelector,
 			keySerializer, null, windowFunction, trigger, allowedLateness, lateDataOutputTag);
@@ -372,7 +365,7 @@ public class SlidingArrayWindowOperator<K, IN, OUT, W extends Window>
 		output = out.f0;
 		forward = out.f1;
 
-		if (slidingAggregator != null){
+		if (slidingAggregator != null && slideRemainingElements > 0){
 
 			if (collectionBuffer.size() != (int) slideRemainingElements){
 				for (int x = 0; x < output.size(); x++){
@@ -382,17 +375,22 @@ public class SlidingArrayWindowOperator<K, IN, OUT, W extends Window>
 					else if (collectionBuffer.size() != (int) slideRemainingElements){
 						collectionBuffer.add(output.get(x));
 					}
-					else{
+					else {
 						collectionBuffer.add(output.get(x));
 						timestampedCollector.collect(collectionBuffer.get(0));
 						collectionBuffer.remove(0);
 					}
 				}
 			}
-			else{
+			else {
 				for (int x = 0; x < output.size(); x++){
 					if (x < slideSize){
-						timestampedCollector.collect(slidingAggregator.aggregate(collectionBuffer.get(x), output.get(x)));
+						if (x < slideRemainingElements){
+							timestampedCollector.collect(slidingAggregator.aggregate(collectionBuffer.get(x), output.get(x)));
+						}
+						else {
+							timestampedCollector.collect(output.get(x));
+						}
 					}
 					else if (x >= collectionBuffer.size()){
 						collectionBuffer.set(x - (int) slideSize, output.get(x));
@@ -420,7 +418,6 @@ public class SlidingArrayWindowOperator<K, IN, OUT, W extends Window>
 
 	}
 
-
 	private ArrayList<IN> createArray(Iterable<StreamRecord<IN>> contents){
 		ArrayList<IN> arr = new ArrayList<>();
 		for (StreamRecord<IN> it : contents){
@@ -428,7 +425,6 @@ public class SlidingArrayWindowOperator<K, IN, OUT, W extends Window>
 		}
 		return arr;
 	}
-
 
 	private void clearAllState(
 		W window,
@@ -505,7 +501,6 @@ public class SlidingArrayWindowOperator<K, IN, OUT, W extends Window>
 	// ------------------------------------------------------------------------
 	// Getters for testing
 	// ------------------------------------------------------------------------
-
 
 	@Override
 	@VisibleForTesting

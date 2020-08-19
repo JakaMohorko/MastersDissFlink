@@ -1,11 +1,7 @@
 package org.apache.flink.streaming.api.datastream;
 
-import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.Public;
-import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.functions.Function;
-import org.apache.flink.api.common.functions.ReduceFunction;
-import org.apache.flink.api.common.functions.RichFunction;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
@@ -13,17 +9,16 @@ import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.windowing.*;
+import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
+import org.apache.flink.streaming.api.functions.windowing.SlidingWindowFunction;
+import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.windowing.assigners.WindowAssigner;
 import org.apache.flink.streaming.api.windowing.evictors.Evictor;
 import org.apache.flink.streaming.api.windowing.triggers.Trigger;
 import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.streaming.runtime.operators.windowing.ArrayWindowOperator;
-import org.apache.flink.streaming.runtime.operators.windowing.MatrixWindowOperator;
 import org.apache.flink.streaming.runtime.operators.windowing.SlidingArrayWindowOperator;
-import org.apache.flink.streaming.runtime.operators.windowing.functions.InternalIterableMatrixWindowFunction;
-import org.apache.flink.streaming.runtime.operators.windowing.functions.InternalIterableProcessWindowFunction;
 import org.apache.flink.streaming.runtime.operators.windowing.functions.InternalIterableSlidingWindowFunction;
 import org.apache.flink.streaming.runtime.operators.windowing.functions.InternalIterableWindowFunction;
 import org.apache.flink.streaming.runtime.operators.windowing.util.SlidingAggregator;
@@ -98,16 +93,6 @@ public class ArrayWindowedStream<T, K, W extends Window> {
 		slideRemainingElements = windowSize - slideSize;
 	}
 
-	public ArrayWindowedStream(KeyedStream<T, K> input, WindowAssigner<? super T, W> windowAssigner, Trigger<? super T, ? super W> trigger,
-	                           Long allowedLateness, OutputTag<T> lateDataOutputTag, long windowSize, long keyNum, KeySelector<T, Integer> matrixKey) {
-		this.input = input;
-		this.windowAssigner = windowAssigner;
-		this.trigger = trigger;
-		this.matrixKey = matrixKey;
-		this.keyNum = keyNum;
-		this.windowSize = windowSize;
-	}
-
 	public <R> SingleOutputStreamOperator<R> applyToArray(
 		WindowFunction<T, R, K, W> function){
 
@@ -146,50 +131,6 @@ public class ArrayWindowedStream<T, K, W extends Window> {
 				allowedLateness,
 				lateDataOutputTag,
 				slideRemainingElements
-			);
-
-		return input.transform(opName, resultType, operator);
-	}
-
-	public <R> SingleOutputStreamOperator<R> applyToMatrix(
-		WindowMatrixFunction<T, R, K, W> function){
-
-		TypeInformation<R> resultType;
-
-		//clean the closures
-		function = input.getExecutionEnvironment().clean(function);
-
-		TypeInformation<T> inType = input.getType();
-		resultType = getMatrixWindowFunctionReturnType(function, inType);
-
-		final String opName = generateOperatorName(windowAssigner, trigger, evictor, null, function);
-		KeySelector<T, K> keySel = input.getKeySelector();
-
-		OneInputStreamOperator<T, R> operator;
-
-		@SuppressWarnings({"unchecked", "rawtypes"})
-		TypeSerializer<StreamRecord<T>> streamRecordSerializer =
-			(TypeSerializer<StreamRecord<T>>) new StreamElementSerializer(input.getType().createSerializer(getExecutionEnvironment().getConfig()));
-
-		ListStateDescriptor<StreamRecord<T>> stateDesc =
-			new ListStateDescriptor<>("window-contents", streamRecordSerializer);
-
-		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-
-		operator =
-			new MatrixWindowOperator<>(windowAssigner,
-				windowAssigner.getWindowSerializer(getExecutionEnvironment().getConfig()),
-				keySel,
-				input.getKeyType().createSerializer(getExecutionEnvironment().getConfig()),
-				stateDesc,
-				new InternalIterableMatrixWindowFunction<>(function),
-				trigger,
-				allowedLateness,
-				lateDataOutputTag,
-				windowSize,
-				keyNum,
-				matrixKey
 			);
 
 		return input.transform(opName, resultType, operator);
@@ -279,20 +220,6 @@ public class ArrayWindowedStream<T, K, W extends Window> {
 		return TypeExtractor.getUnaryOperatorReturnType(
 			function,
 			WindowFunction.class,
-			0,
-			1,
-			new int[]{3, 0},
-			inType,
-			null,
-			false);
-	}
-
-	private static <IN, OUT, KEY> TypeInformation<OUT> getMatrixWindowFunctionReturnType(
-		WindowMatrixFunction<IN, OUT, KEY, ?> function,
-		TypeInformation<IN> inType) {
-		return TypeExtractor.getUnaryOperatorReturnType(
-			function,
-			WindowMatrixFunction.class,
 			0,
 			1,
 			new int[]{3, 0},

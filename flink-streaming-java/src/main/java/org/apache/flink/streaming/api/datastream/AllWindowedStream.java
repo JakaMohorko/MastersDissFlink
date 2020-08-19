@@ -138,7 +138,7 @@ public class AllWindowedStream<T, W extends Window> {
 
 	@PublicEvolving
 	public AllWindowedStream(DataStream<T> input,
-	                         WindowAssigner<? super T, W> windowAssigner, long windowSize, long slideSize) {
+							WindowAssigner<? super T, W> windowAssigner, long windowSize, long slideSize) {
 		this.input = input.keyBy(new NullByteKeySelector<T>());
 		this.windowAssigner = windowAssigner;
 		this.trigger = windowAssigner.getDefaultTrigger(input.getExecutionEnvironment());
@@ -1580,11 +1580,6 @@ public class AllWindowedStream<T, W extends Window> {
 	public ArrayWindowedStream<T, Byte, W> toArrayStreamSliding() {
 		return new ArrayWindowedStream<T, Byte, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
 			evictor, windowSize, slideSize);
-	}
-
-	public ArrayWindowedStream<T, Byte, W> toArrayStreamMatrix(long windowSize, long numKeys, KeySelector<T, Integer> matrixKey) {
-		return new ArrayWindowedStream<T, Byte, W>(input, windowAssigner, trigger, allowedLateness, lateDataOutputTag,
-					windowSize, numKeys, matrixKey);
 	}
 
 	private SingleOutputStreamOperator<T> aggregate(AggregationFunction<T> aggregator) {
